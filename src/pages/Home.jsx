@@ -1,28 +1,87 @@
+import { useState, useRef, useCallback, useEffect } from 'react'
+
+const PREFILL =
+  'I managed a team of __ people. I was responsible for __. I handled __.'
+
+const CHIPS = [
+  { label: 'Managed people',  append: 'I managed and led a team of people. ' },
+  { label: 'Logistics',       append: 'I coordinated logistics and supply chain operations. ' },
+  { label: 'Training',        append: 'I trained and developed junior team members. ' },
+  { label: 'Operations',      append: 'I oversaw day-to-day operations and ensured mission readiness. ' },
+  { label: 'Equipment',       append: 'I maintained and managed equipment and inventory. ' },
+  { label: 'Admin',           append: 'I handled administrative duties and documentation. ' },
+]
+
+const MOCK_RESUME = {
+  summary:
+    'Results-driven operations leader with 8+ years of experience managing cross-functional teams and coordinating complex logistics in high-pressure, mission-critical environments. Proven ability to lead diverse personnel, drive process improvements, and deliver measurable outcomes on time and within budget. Seeking to leverage military leadership expertise in a civilian operations or project management role.',
+
+  experienceTitle:   'Operations Supervisor',
+  experienceCompany: 'U.S. Army',
+  experiencePeriod:  '2016 – 2024',
+  experienceBullets: [
+    'Led a team of 12 personnel across daily operations, ensuring 100% mission readiness and zero safety incidents over 3 years.',
+    'Coordinated logistics and maintenance for $2.4M in equipment inventory, achieving a 0% loss rate across all assigned assets.',
+    'Developed and delivered onboarding training for 40+ new team members, reducing ramp-up time by 30%.',
+    'Managed administrative documentation for 150+ personnel files with a 98% accuracy rating during annual compliance audits.',
+  ],
+
+  coreSkills: [
+    'Team Leadership & Personnel Management',
+    'Logistics & Supply Chain Coordination',
+    'Operations Planning & Execution',
+    'Training Program Development',
+    'Equipment & Inventory Management',
+    'Risk Assessment & Mitigation',
+    'Administrative & Compliance Management',
+    'Cross-functional Collaboration',
+  ],
+
+  whyFit: [
+    'Direct experience leading teams and managing operations at scale — maps directly to the posted requirements.',
+    'Track record of process improvement and accountability under resource-constrained, high-stakes conditions.',
+    'Disciplined, adaptable, and results-oriented — qualities refined through service and immediately applicable.',
+  ],
+}
+
+// ─── Icons ────────────────────────────────────────────────────────────────────
+
 function LogoIcon() {
   return (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 32 32"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
       <rect width="32" height="32" rx="8" fill="#2563eb" />
       <rect x="8" y="9" width="16" height="2" rx="1" fill="white" />
       <rect x="8" y="14" width="16" height="2" rx="1" fill="white" />
       <rect x="8" y="19" width="10" height="2" rx="1" fill="white" />
       <circle cx="24" cy="23" r="4" fill="#22c55e" />
-      <path
-        d="M22 23l1.5 1.5L26 21"
-        stroke="white"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M22 23l1.5 1.5L26 21" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
+
+function MicIcon() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M5 10a7 7 0 0 0 14 0" />
+      <line x1="12" y1="19" x2="12" y2="22" />
+      <line x1="9" y1="22" x2="15" y2="22" />
+    </svg>
+  )
+}
+
+function Spinner() {
+  return (
+    <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+    </svg>
+  )
+}
+
+// ─── Header ───────────────────────────────────────────────────────────────────
 
 function Header() {
   return (
@@ -39,6 +98,8 @@ function Header() {
     </header>
   )
 }
+
+// ─── Hero ─────────────────────────────────────────────────────────────────────
 
 function Hero() {
   return (
@@ -70,7 +131,622 @@ function Hero() {
   )
 }
 
+// ─── Mode tabs ────────────────────────────────────────────────────────────────
+
+const TABS = [
+  { id: 'default', label: 'Describe what you did' },
+  { id: 'voice',   label: 'Speak instead' },
+  { id: 'chips',   label: 'Tap to Build' },
+]
+
+function ModeTabs({ mode, setMode }) {
+  return (
+    <div className="flex gap-1 rounded-xl bg-slate-100 p-1" role="tablist" aria-label="Input mode">
+      {TABS.map(t => (
+        <button
+          key={t.id}
+          role="tab"
+          aria-selected={mode === t.id}
+          onClick={() => setMode(t.id)}
+          className={`
+            min-h-[44px] flex-1 rounded-lg px-2 py-2 text-xs font-semibold leading-tight transition-all
+            ${mode === t.id
+              ? 'bg-white text-blue-700 shadow-sm'
+              : 'text-slate-500 hover:text-slate-800'}
+          `}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ─── Voice panel ──────────────────────────────────────────────────────────────
+
+function VoicePanel({ setExperience }) {
+  const [phase,    setPhase]    = useState('idle') // idle | active | done
+  const [liveText, setLiveText] = useState('')
+  const [trail,    setTrail]    = useState([])
+  const [error,    setError]    = useState('')
+  const [didSave,  setDidSave]  = useState(false)
+
+  const keepAlive  = useRef(false)
+  const finalText  = useRef('')  // isFinal chunks only
+  const interimText = useRef('') // latest interim chunk (not yet final)
+  const currentRec = useRef(null)
+
+  const supported =
+    typeof window !== 'undefined' &&
+    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
+
+  function addTrail(msg) {
+    setTrail(prev => [...prev.slice(-4), msg])
+  }
+
+  function flush() {
+    // Combine confirmed final text with any interim that was never finalised
+    // (happens when the user taps Stop mid-sentence)
+    const combined = [finalText.current, interimText.current]
+      .map(s => s.trim())
+      .filter(Boolean)
+      .join(' ')
+    if (combined) {
+      setExperience(prev => {
+        const base = prev.trim()
+        // If it's still the untouched prefill, don't append — replace
+        return base && base !== PREFILL ? `${base} ${combined}` : combined
+      })
+      setDidSave(true)
+    }
+  }
+
+  function startSession() {
+    const SR  = window.SpeechRecognition || window.webkitSpeechRecognition
+    const rec = new SR()
+    rec.lang            = 'en-US'
+    rec.interimResults  = true
+    rec.continuous      = true   // stay open across pauses; we call stop() manually
+    rec.maxAlternatives = 1
+
+    rec.onstart       = () => { addTrail('mic on');           setPhase('active') }
+    rec.onaudiostart  = () =>   addTrail('audio capturing…')
+    rec.onsoundstart  = () =>   addTrail('sound detected')
+    rec.onspeechstart = () =>   addTrail('speech recognised!')
+
+    rec.onresult = (e) => {
+      let interim = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const chunk = e.results[i][0].transcript
+        if (e.results[i].isFinal) {
+          finalText.current +=
+            (finalText.current ? ' ' : '') + chunk.trim()
+          interimText.current = ''
+        } else {
+          interim += chunk
+        }
+      }
+      interimText.current = interim
+      setLiveText(
+        finalText.current +
+          (interim ? (finalText.current ? ' ' : '') + interim : '')
+      )
+    }
+
+    rec.onerror = (e) => {
+      addTrail(`error: ${e.error}`)
+      if (e.error === 'no-speech') return  // continuous mode keeps going
+      if (e.error === 'aborted')   return
+      keepAlive.current = false
+      setPhase('idle')
+      setError(
+        e.error === 'not-allowed'
+          ? 'Microphone access denied. Check Chrome site permissions and Windows microphone privacy settings.'
+          : e.error === 'network'
+            ? 'Network error — Chrome needs internet to process speech. Check your connection.'
+            : `Recognition failed (${e.error}). Try again or switch to the Describe tab.`
+      )
+    }
+
+    rec.onend = () => {
+      addTrail('session ended')
+      if (keepAlive.current) {
+        // continuous mode still fires onend on no-speech — restart after short gap
+        setTimeout(() => {
+          if (keepAlive.current) startSession()
+        }, 200)
+      } else {
+        // user tapped Stop — flush everything collected so far
+        flush()
+        setPhase('done')
+      }
+    }
+
+    currentRec.current = rec
+    try {
+      rec.start()
+    } catch (err) {
+      setError(`Could not start microphone: ${err.message}`)
+      keepAlive.current = false
+    }
+  }
+
+  const handleStart = () => {
+    setError('')
+    setLiveText('')
+    setTrail([])
+    setDidSave(false)
+    finalText.current   = ''
+    interimText.current = ''
+    keepAlive.current   = true
+    startSession()
+  }
+
+  const handleStop = () => {
+    keepAlive.current = false
+    try { currentRec.current?.stop() } catch (_) {}
+  }
+
+  if (!supported) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-5 text-center">
+        <p className="text-sm font-semibold text-amber-800">
+          Voice input isn&apos;t supported in this browser.
+        </p>
+        <p className="mt-1 text-xs text-amber-700">
+          Try Chrome on Android, or use the &ldquo;Describe&rdquo; tab instead.
+        </p>
+      </div>
+    )
+  }
+
+  const isActive = phase === 'active'
+
+  return (
+    <div className="text-center">
+      <p className="mb-6 text-sm leading-relaxed text-slate-600">
+        Tap the button, speak naturally, then tap again to stop. Words appear
+        in real time and are added to the experience box below.
+      </p>
+
+      {/* Mic button */}
+      <button
+        onClick={isActive ? handleStop : handleStart}
+        aria-label={isActive ? 'Stop recording' : 'Start recording'}
+        className={`
+          mx-auto flex h-20 w-20 items-center justify-center rounded-full text-white
+          shadow-lg transition-all active:scale-95
+          ${isActive ? 'animate-pulse bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-700'}
+        `}
+      >
+        <MicIcon />
+      </button>
+
+      {/* Status label */}
+      <p className="mt-3 text-xs font-medium text-slate-500">
+        {phase === 'idle'   && 'Tap to speak'}
+        {phase === 'active' && 'Listening — tap to stop'}
+        {phase === 'done'   && (didSave ? 'Added to your experience below.' : 'Nothing captured — try again.')}
+      </p>
+
+      {/* Event trail — shows exactly where the pipeline is up to */}
+      {trail.length > 0 && (
+        <p className="mt-1 text-xs text-blue-500 tracking-wide">
+          {trail.join(' → ')}
+        </p>
+      )}
+
+      {/* Live transcript box */}
+      {(isActive || (phase === 'done' && liveText)) && !error && (
+        <div className="mt-4 min-h-[60px] rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            {isActive ? 'Transcript' : 'Captured'}
+          </p>
+          <p className="text-sm leading-relaxed text-slate-800">
+            {liveText || (
+              <span className="text-slate-300">Words will appear here as you speak…</span>
+            )}
+          </p>
+        </div>
+      )}
+
+      {error && (
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-left text-sm text-red-700">
+          {error}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Chips panel ──────────────────────────────────────────────────────────────
+
+function ChipsPanel({ setExperience }) {
+  const handleChip = useCallback((append) => {
+    setExperience(prev => {
+      const base = prev === PREFILL || !prev.trim() ? '' : prev.trim()
+      return base ? `${base} ${append}` : append
+    })
+  }, [setExperience])
+
+  return (
+    <div>
+      <p className="mb-4 text-sm leading-relaxed text-slate-600">
+        Tap the topics that match your background — each one adds a sentence to
+        your experience description below.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {CHIPS.map(chip => (
+          <button
+            key={chip.label}
+            onClick={() => handleChip(chip.append)}
+            className="
+              min-h-[44px] rounded-full border border-slate-200 bg-white px-5 py-2
+              text-sm font-medium text-slate-700 shadow-sm transition-all
+              active:scale-95 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700
+            "
+          >
+            + {chip.label}
+          </button>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-slate-400">
+        Tap as many as apply — then edit the text below if you want to add details.
+      </p>
+    </div>
+  )
+}
+
+// ─── Input system ─────────────────────────────────────────────────────────────
+
+function InputSystem({ experience, setExperience }) {
+  const [mode, setMode] = useState('default')
+
+  return (
+    <section className="px-4 pb-6">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="mb-4 text-base font-semibold text-slate-800">
+          Step 1 &mdash; Describe your experience
+        </h2>
+
+        <ModeTabs mode={mode} setMode={setMode} />
+
+        <div className="mt-5">
+          {mode === 'voice' && <VoicePanel setExperience={setExperience} />}
+          {mode === 'chips' && <ChipsPanel setExperience={setExperience} />}
+        </div>
+
+        <div className={mode !== 'default' ? 'mt-5' : 'mt-4'}>
+          {mode !== 'default' && (
+            <p className="mb-2 text-xs font-medium text-slate-500">
+              Your experience so far — edit freely
+            </p>
+          )}
+          <textarea
+            value={experience}
+            onChange={e => setExperience(e.target.value)}
+            rows={6}
+            aria-label="Your experience"
+            className="
+              w-full resize-none rounded-xl border border-slate-200 bg-slate-50
+              px-4 py-3 text-base leading-relaxed text-slate-900 shadow-inner
+              outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100
+            "
+          />
+          {mode === 'default' && (
+            <p className="mt-1.5 text-xs text-slate-400">
+              Fill in the blanks or write freely — anything works.
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── Job section ──────────────────────────────────────────────────────────────
+
+function JobSection({ experience, jobDescription, setJobDescription, onSubmit, isLoading }) {
+  const [expError, setExpError] = useState('')
+  const [jobError, setJobError] = useState('')
+
+  const experienceFilled =
+    experience.trim().length > 0 && experience.trim() !== PREFILL
+
+  const handleSubmit = () => {
+    let valid = true
+
+    if (!experienceFilled) {
+      setExpError('Please describe your experience in Step 1 before continuing.')
+      valid = false
+    } else {
+      setExpError('')
+    }
+
+    if (!jobDescription.trim()) {
+      setJobError('Please paste a job description so we can tailor your resume.')
+      valid = false
+    } else {
+      setJobError('')
+    }
+
+    if (!valid) return
+    onSubmit()
+  }
+
+  return (
+    <section className="px-4 pb-8">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="mb-1 text-base font-semibold text-slate-800">
+          Step 2 &mdash; Paste the job description
+        </h2>
+        <p className="mb-4 text-sm text-slate-500">
+          We&apos;ll match your experience to the exact keywords the employer is looking for.
+        </p>
+
+        <textarea
+          value={jobDescription}
+          onChange={e => {
+            setJobDescription(e.target.value)
+            if (jobError) setJobError('')
+          }}
+          rows={8}
+          placeholder="Paste the full job description here — title, requirements, responsibilities…"
+          aria-label="Job description"
+          className={`
+            w-full resize-none rounded-xl border px-4 py-3 text-base leading-relaxed
+            text-slate-900 outline-none transition
+            ${jobError
+              ? 'border-red-400 bg-red-50 focus:ring-2 focus:ring-red-100'
+              : 'border-slate-200 bg-slate-50 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100'}
+          `}
+        />
+
+        {/* Inline field errors */}
+        {jobError && (
+          <p className="mt-2 flex items-center gap-1.5 text-sm text-red-600">
+            <span aria-hidden="true">&#9888;</span> {jobError}
+          </p>
+        )}
+        {expError && (
+          <p className="mt-2 flex items-center gap-1.5 text-sm text-red-600">
+            <span aria-hidden="true">&#9888;</span> {expError}
+          </p>
+        )}
+
+        {/* Submit button — full width, large tap target */}
+        <button
+          onClick={handleSubmit}
+          disabled={isLoading}
+          className={`
+            mt-5 flex w-full items-center justify-center gap-3 rounded-xl
+            py-4 text-base font-bold text-white shadow-md transition-all
+            active:scale-[0.98] disabled:cursor-not-allowed
+            ${isLoading
+              ? 'bg-blue-400'
+              : 'bg-blue-600 hover:bg-blue-700'}
+          `}
+        >
+          {isLoading ? (
+            <>
+              <Spinner />
+              Building your resume… this takes ~15 seconds
+            </>
+          ) : (
+            'Create My Resume'
+          )}
+        </button>
+
+        {!isLoading && (
+          <p className="mt-3 text-center text-xs text-slate-400">
+            Preview is free &mdash; unlock the full package for $2.99
+          </p>
+        )}
+      </div>
+    </section>
+  )
+}
+
+// ─── Preview section ──────────────────────────────────────────────────────────
+
+function LockIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  )
+}
+
+function SectionCard({ title, badge, children }) {
+  return (
+    <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-3 flex items-center gap-2">
+        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">{title}</h3>
+        {badge && (
+          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+            {badge}
+          </span>
+        )}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function PreviewSection({ show }) {
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (show) {
+      setTimeout(() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
+    }
+  }, [show])
+
+  if (!show) return null
+
+  const visibleBullets = MOCK_RESUME.experienceBullets.slice(0, 2)
+  const hiddenBullets  = MOCK_RESUME.experienceBullets.slice(2)
+
+  return (
+    <section ref={ref} id="preview-section" className="px-4 pb-16">
+
+      {/* Section header */}
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">Your Resume Preview</h2>
+          <p className="text-sm text-slate-500">Free preview · Unlock the full package below</p>
+        </div>
+        <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+          Mock data
+        </span>
+      </div>
+
+      {/* ① Professional Summary — fully visible */}
+      <SectionCard title="Professional Summary" badge="Visible">
+        <p className="text-sm leading-relaxed text-slate-700">{MOCK_RESUME.summary}</p>
+      </SectionCard>
+
+      {/* ② Professional Experience — first 2 bullets visible, rest blurred */}
+      <SectionCard title="Professional Experience" badge="Visible">
+        <div className="mb-3">
+          <p className="font-semibold text-slate-800">{MOCK_RESUME.experienceTitle}</p>
+          <p className="text-sm text-slate-500">
+            {MOCK_RESUME.experienceCompany} &nbsp;·&nbsp; {MOCK_RESUME.experiencePeriod}
+          </p>
+        </div>
+        <ul className="space-y-2">
+          {visibleBullets.map((b, i) => (
+            <li key={i} className="flex gap-2 text-sm text-slate-700">
+              <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
+              {b}
+            </li>
+          ))}
+        </ul>
+
+        {/* Blurred remaining bullets with gradient fade */}
+        <div className="relative mt-2 overflow-hidden">
+          <ul className="pointer-events-none select-none space-y-2 blur-sm">
+            {hiddenBullets.map((b, i) => (
+              <li key={i} className="flex gap-2 text-sm text-slate-700">
+                <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
+                {b}
+              </li>
+            ))}
+          </ul>
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white" />
+        </div>
+      </SectionCard>
+
+      {/* ③ Locked content — blurred teaser */}
+      <div className="relative mb-4 overflow-hidden rounded-2xl">
+        <div className="pointer-events-none select-none space-y-4 blur-sm">
+          {/* Core Skills teaser */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Core Skills</p>
+            <div className="flex flex-wrap gap-2">
+              {MOCK_RESUME.coreSkills.map(s => (
+                <span key={s} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">
+                  {s}
+                </span>
+              ))}
+            </div>
+          </div>
+          {/* Why You're a Strong Fit teaser */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Why You Are a Strong Fit</p>
+            <ul className="space-y-2">
+              {MOCK_RESUME.whyFit.map((b, i) => (
+                <li key={i} className="flex gap-2 text-sm text-slate-700">
+                  <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-green-500" />
+                  {b}
+                </li>
+              ))}
+            </ul>
+          </div>
+          {/* Cover Letter + Interview Prep placeholder rows */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Tailored Cover Letter</p>
+            <div className="space-y-2">
+              {[100, 90, 95, 70].map(w => (
+                <div key={w} className="h-3 rounded bg-slate-200" style={{ width: `${w}%` }} />
+              ))}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Interview Prep (3 answers)</p>
+            <div className="space-y-2">
+              {[80, 100, 85].map(w => (
+                <div key={w} className="h-3 rounded bg-slate-200" style={{ width: `${w}%` }} />
+              ))}
+            </div>
+          </div>
+        </div>
+        {/* Top-to-bottom gradient overlay */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-50/10 via-slate-50/60 to-slate-50" />
+      </div>
+
+      {/* ④ CTA banner */}
+      <div className="overflow-hidden rounded-2xl border-2 border-blue-600 bg-white shadow-lg">
+        {/* Top accent stripe */}
+        <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 to-green-500" />
+
+        <div className="p-6 text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+            <LockIcon />
+          </div>
+
+          <h3 className="text-xl font-extrabold text-slate-900">
+            Unlock your full resume package
+          </h3>
+          <p className="mt-2 text-sm leading-relaxed text-slate-600">
+            Full resume · Cover letter · Why you&apos;re a strong fit · 3 interview answers
+          </p>
+
+          <div className="my-5 flex items-baseline justify-center gap-1">
+            <span className="text-4xl font-extrabold text-slate-900">$2.99</span>
+            <span className="text-sm text-slate-500">one-time</span>
+          </div>
+
+          {/* Unlock Now button — Stripe wired in Day 5 */}
+          <button
+            className="
+              flex w-full items-center justify-center gap-2 rounded-xl
+              bg-green-500 py-4 text-base font-bold text-white shadow-md
+              transition-all hover:bg-green-600 active:scale-[0.98]
+            "
+          >
+            Unlock Now &rarr;
+          </button>
+
+          <p className="mt-4 text-xs text-slate-400">
+            Instant delivery &nbsp;·&nbsp; One-time payment &nbsp;·&nbsp; No subscription
+          </p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── Home ─────────────────────────────────────────────────────────────────────
+
 function Home() {
+  const [experience,      setExperience]      = useState(PREFILL)
+  const [jobDescription,  setJobDescription]  = useState('')
+  const [isLoading,       setIsLoading]       = useState(false)
+  const [showPreview,     setShowPreview]     = useState(false)
+
+  const handleSubmit = () => {
+    setIsLoading(true)
+    setShowPreview(false)
+    // Simulate AI response time — replaced with real API call in Task 9
+    setTimeout(() => {
+      setIsLoading(false)
+      setShowPreview(true)
+    }, 2000)
+  }
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-slate-50">
       <Header />
@@ -78,20 +754,20 @@ function Home() {
       <main className="mx-auto max-w-3xl">
         <Hero />
 
-        {/* Task 3 — Input System placeholder */}
-        <section id="input-section" className="px-4 pb-6">
-          {/* Three input modes go here (Task 3) */}
-        </section>
+        <InputSystem experience={experience} setExperience={setExperience} />
 
-        {/* Task 4 — Job description + submit placeholder */}
-        <section id="job-section" className="px-4 pb-6">
-          {/* Job description field + Create My Resume button go here (Task 4) */}
-        </section>
+        <JobSection
+          experience={experience}
+          jobDescription={jobDescription}
+          setJobDescription={setJobDescription}
+          onSubmit={handleSubmit}
+          isLoading={isLoading}
+        />
 
-        {/* Task 5 — Preview UI placeholder */}
-        <section id="preview-section" className="px-4 pb-16">
-          {/* Mocked resume preview + blur + CTA goes here (Task 5) */}
-        </section>
+        <PreviewSection show={showPreview} />
+
+        {/* placeholder kept for router compatibility */}
+        <div id="preview-section-anchor" />
       </main>
     </div>
   )

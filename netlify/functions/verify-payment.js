@@ -1,24 +1,32 @@
-// Netlify Function: /.netlify/functions/verify-payment
-// Day 5 (Task 12): verify Stripe Checkout session by session_id, return { paid: boolean }.
+import Stripe from 'stripe'
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Content-Type': 'application/json',
+}
+
+function respond(statusCode, body) {
+  return { statusCode, headers: CORS, body: JSON.stringify(body) }
+}
 
 export async function handler(event) {
-  if (event.httpMethod !== 'POST' && event.httpMethod !== 'GET') {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ error: 'Method not allowed' }),
-    }
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' }
+
+  const sessionId = event.queryStringParameters?.session_id
+  if (!sessionId) return respond(400, { error: 'session_id is required' })
+
+  const stripeKey = process.env.STRIPE_SECRET_KEY
+  if (!stripeKey) return respond(500, { error: 'Stripe is not configured' })
+
+  const stripe = new Stripe(stripeKey)
+
+  let session
+  try {
+    session = await stripe.checkout.sessions.retrieve(sessionId)
+  } catch (err) {
+    return respond(500, { error: `Stripe error: ${err.message}` })
   }
 
-  // TODO (Day 5):
-  //   1. Read session_id from event.queryStringParameters or event.body
-  //   2. stripe.checkout.sessions.retrieve(sessionId)
-  //   3. Return { paid: session.payment_status === 'paid' }
-
-  return {
-    statusCode: 501,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      error: 'Not implemented yet — wire up on Day 5.',
-    }),
-  }
+  return respond(200, { paid: session.payment_status === 'paid' })
 }

@@ -545,14 +545,132 @@ function SectionCard({ title, badge, children }) {
   )
 }
 
-function PreviewSection({ resume }) {
-  const ref = useRef(null)
+// ─── Full unlocked view ───────────────────────────────────────────────────────
+
+function FullResume({ resume }) {
+  const coverParas = (resume.coverLetter ?? '').split(/\n\n+/).filter(Boolean)
+
+  return (
+    <div className="space-y-4">
+
+      {/* ① Professional Summary */}
+      <SectionCard title="Professional Summary">
+        <p className="text-sm leading-relaxed text-slate-700">{resume.summary}</p>
+      </SectionCard>
+
+      {/* ② Core Skills */}
+      <SectionCard title="Core Skills">
+        <div className="flex flex-wrap gap-2">
+          {(resume.coreSkills ?? []).map((s, i) => (
+            <span key={i} className="rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-xs font-medium text-blue-700">
+              {s}
+            </span>
+          ))}
+        </div>
+      </SectionCard>
+
+      {/* ③ Professional Experience — all roles, all bullets */}
+      {(resume.experience ?? []).map((role, ri) => (
+        <SectionCard key={ri} title="Professional Experience">
+          <div className="mb-3">
+            <p className="font-semibold text-slate-800">{role.title}</p>
+            <p className="text-sm text-slate-500">{role.company}&nbsp;·&nbsp;{role.period}</p>
+          </div>
+          <ul className="space-y-2">
+            {(role.bullets ?? []).map((b, i) => (
+              <li key={i} className="flex gap-2 text-sm text-slate-700">
+                <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
+                {b}
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
+      ))}
+
+      {/* ④ Civilian Translation */}
+      <SectionCard title="Civilian Translation">
+        <ul className="space-y-3">
+          {(resume.civilianTranslation ?? []).map((line, i) => (
+            <li key={i} className="flex gap-3 text-sm text-slate-700">
+              <span className="mt-0.5 flex-shrink-0 text-base">🔄</span>
+              {line}
+            </li>
+          ))}
+        </ul>
+      </SectionCard>
+
+      {/* ⑤ Tailored Cover Letter */}
+      <SectionCard title="Tailored Cover Letter">
+        <div className="space-y-3">
+          {coverParas.map((para, i) => (
+            <p key={i} className="text-sm leading-relaxed text-slate-700">{para}</p>
+          ))}
+        </div>
+      </SectionCard>
+
+      {/* ⑥ Why You Are a Strong Fit */}
+      <SectionCard title="Why You Are a Strong Fit">
+        <ul className="space-y-3">
+          {(resume.whyStrongFit ?? []).map((b, i) => (
+            <li key={i} className="flex gap-3 text-sm text-slate-700">
+              <span className="mt-0.5 flex-shrink-0 text-base">✅</span>
+              {b}
+            </li>
+          ))}
+        </ul>
+      </SectionCard>
+
+      {/* ⑦ Interview Prep */}
+      <SectionCard title="Interview Prep">
+        <div className="space-y-5">
+          {(resume.interviewPrep ?? []).map((qa, i) => (
+            <div key={i} className="rounded-xl bg-slate-50 p-4">
+              <p className="mb-2 text-sm font-semibold text-slate-800">Q: {qa.question}</p>
+              <p className="text-sm leading-relaxed text-slate-600">{qa.answer}</p>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+    </div>
+  )
+}
+
+// ─── Preview section ───────────────────────────────────────────────────────────
+
+function PreviewSection({ resume, hasPaid }) {
+  const ref              = useRef(null)
+  const [unlocked,    setUnlocked]    = useState(false)
+  const [unlocking,   setUnlocking]   = useState(false)
+  const [unlockError, setUnlockError] = useState('')
 
   useEffect(() => {
     if (resume) {
+      setUnlocked(false)
+      setUnlockError('')
       setTimeout(() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
     }
   }, [resume])
+
+  // Force open when returning from a verified payment
+  useEffect(() => {
+    if (hasPaid) setUnlocked(true)
+  }, [hasPaid])
+
+  const handleUnlock = async () => {
+    setUnlocking(true)
+    setUnlockError('')
+    try {
+      // Persist resume so the Success page can restore it after redirect
+      localStorage.setItem('resumeai_resume', JSON.stringify(resume))
+      const { data } = await api.post('/create-checkout', {})
+      window.location.href = data.url
+    } catch (err) {
+      setUnlockError(
+        err?.response?.data?.error ?? 'Could not start checkout — please try again.'
+      )
+      setUnlocking(false)
+    }
+  }
 
   if (!resume) return null
 
@@ -565,131 +683,154 @@ function PreviewSection({ resume }) {
   return (
     <section ref={ref} id="preview-section" className="px-4 pb-16">
 
-      {/* Header */}
-      <div className="mb-5 flex items-center justify-between">
+      {/* ── Header ── */}
+      <div className="mb-5 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Your Resume Preview</h2>
-          <p className="text-sm text-slate-500">Free preview · Unlock the full package below</p>
-        </div>
-        <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
-          AI Generated
-        </span>
-      </div>
-
-      {/* ① Professional Summary — fully visible */}
-      <SectionCard title="Professional Summary" badge="Visible">
-        <p className="text-sm leading-relaxed text-slate-700">{resume.summary}</p>
-      </SectionCard>
-
-      {/* ② Professional Experience — first 2 bullets visible, rest blurred */}
-      <SectionCard title="Professional Experience" badge="Visible">
-        <div className="mb-3">
-          <p className="font-semibold text-slate-800">{role.title}</p>
           <p className="text-sm text-slate-500">
-            {role.company}&nbsp;·&nbsp;{role.period}
+            {unlocked ? 'Full package — all 7 sections' : 'Free preview · Unlock the full package below'}
           </p>
         </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {hasPaid ? (
+            <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+              Payment Verified ✓
+            </span>
+          ) : (
+            <>
+              <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                AI Generated
+              </span>
+              <button
+                onClick={() => setUnlocked(u => !u)}
+                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-blue-400 hover:text-blue-600"
+              >
+                {unlocked ? '🔒 Lock view' : '👁 See full'}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
 
-        <ul className="space-y-2">
-          {visibleBullets.map((b, i) => (
-            <li key={i} className="flex gap-2 text-sm text-slate-700">
-              <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
-              {b}
-            </li>
-          ))}
-        </ul>
+      {/* ── Unlocked: all 7 sections ── */}
+      {unlocked && <FullResume resume={resume} />}
 
-        {hiddenBullets.length > 0 && (
-          <div className="relative mt-2 overflow-hidden">
-            <ul className="pointer-events-none select-none space-y-2 blur-sm">
-              {hiddenBullets.map((b, i) => (
+      {/* ── Locked: summary + 2 bullets visible, rest blurred ── */}
+      {!unlocked && (
+        <>
+          {/* ① Summary */}
+          <SectionCard title="Professional Summary" badge="Visible">
+            <p className="text-sm leading-relaxed text-slate-700">{resume.summary}</p>
+          </SectionCard>
+
+          {/* ② Experience partial */}
+          <SectionCard title="Professional Experience" badge="Visible">
+            <div className="mb-3">
+              <p className="font-semibold text-slate-800">{role.title}</p>
+              <p className="text-sm text-slate-500">{role.company}&nbsp;·&nbsp;{role.period}</p>
+            </div>
+            <ul className="space-y-2">
+              {visibleBullets.map((b, i) => (
                 <li key={i} className="flex gap-2 text-sm text-slate-700">
                   <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
                   {b}
                 </li>
               ))}
             </ul>
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white" />
+            {hiddenBullets.length > 0 && (
+              <div className="relative mt-2 overflow-hidden">
+                <ul className="pointer-events-none select-none space-y-2 blur-sm">
+                  {hiddenBullets.map((b, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-slate-700">
+                      <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
+                      {b}
+                    </li>
+                  ))}
+                </ul>
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white" />
+              </div>
+            )}
+          </SectionCard>
+
+          {/* ③ Blurred teaser */}
+          <div className="relative mb-4 overflow-hidden rounded-2xl">
+            <div className="pointer-events-none select-none space-y-4 blur-sm">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Core Skills</p>
+                <div className="flex flex-wrap gap-2">
+                  {(resume.coreSkills ?? []).map((s, i) => (
+                    <span key={i} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">{s}</span>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Why You Are a Strong Fit</p>
+                <ul className="space-y-2">
+                  {(resume.whyStrongFit ?? []).map((b, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-slate-700">
+                      <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-green-500" />
+                      {b}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Tailored Cover Letter</p>
+                {coverParas.slice(0, 2).map((p, i) => (
+                  <p key={i} className="mt-1 text-sm leading-relaxed text-slate-700">{p}</p>
+                ))}
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Interview Prep (3 answers)</p>
+                <ul className="space-y-3">
+                  {(resume.interviewPrep ?? []).map((qa, i) => (
+                    <li key={i} className="text-sm font-medium text-slate-700">{qa.question}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-50/10 via-slate-50/60 to-slate-50" />
           </div>
-        )}
-      </SectionCard>
 
-      {/* ③ Locked content — real AI data, blurred */}
-      <div className="relative mb-4 overflow-hidden rounded-2xl">
-        <div className="pointer-events-none select-none space-y-4 blur-sm">
-
-          {/* Core Skills */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Core Skills</p>
-            <div className="flex flex-wrap gap-2">
-              {(resume.coreSkills ?? []).map((s, i) => (
-                <span key={i} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">
-                  {s}
-                </span>
-              ))}
+          {/* ④ CTA */}
+          <div className="overflow-hidden rounded-2xl border-2 border-blue-600 bg-white shadow-lg">
+            <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 to-green-500" />
+            <div className="p-6 text-center">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                <LockIcon />
+              </div>
+              <h3 className="text-xl font-extrabold text-slate-900">Unlock your full resume package</h3>
+              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                Full resume · Cover letter · Why you&apos;re a strong fit · 3 interview answers
+              </p>
+              <div className="my-5 flex items-baseline justify-center gap-1">
+                <span className="text-4xl font-extrabold text-slate-900">$2.99</span>
+                <span className="text-sm text-slate-500">one-time</span>
+              </div>
+              <button
+                onClick={handleUnlock}
+                disabled={unlocking}
+                className={`flex w-full items-center justify-center gap-2 rounded-xl py-4 text-base font-bold text-white shadow-md transition-all active:scale-[0.98] disabled:cursor-not-allowed ${unlocking ? 'bg-green-400' : 'bg-green-500 hover:bg-green-600'}`}
+              >
+                {unlocking ? (
+                  <>
+                    <Spinner />
+                    Redirecting to checkout…
+                  </>
+                ) : (
+                  'Unlock Now →'
+                )}
+              </button>
+              {unlockError && (
+                <p className="mt-3 text-xs text-red-600">{unlockError}</p>
+              )}
+              <p className="mt-4 text-xs text-slate-400">
+                Instant delivery &nbsp;·&nbsp; One-time payment &nbsp;·&nbsp; No subscription
+              </p>
             </div>
           </div>
-
-          {/* Why Strong Fit */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Why You Are a Strong Fit</p>
-            <ul className="space-y-2">
-              {(resume.whyStrongFit ?? []).map((b, i) => (
-                <li key={i} className="flex gap-2 text-sm text-slate-700">
-                  <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-green-500" />
-                  {b}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Cover Letter — show first paragraph blurred */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Tailored Cover Letter</p>
-            <p className="text-sm leading-relaxed text-slate-700">{coverParas[0]}</p>
-            {coverParas.length > 1 && (
-              <p className="mt-2 text-sm leading-relaxed text-slate-700">{coverParas[1]}</p>
-            )}
-          </div>
-
-          {/* Interview Prep — show questions blurred */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Interview Prep (3 answers)</p>
-            <ul className="space-y-3">
-              {(resume.interviewPrep ?? []).map((qa, i) => (
-                <li key={i} className="text-sm font-medium text-slate-700">{qa.question}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-50/10 via-slate-50/60 to-slate-50" />
-      </div>
-
-      {/* ④ CTA banner */}
-      <div className="overflow-hidden rounded-2xl border-2 border-blue-600 bg-white shadow-lg">
-        <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 to-green-500" />
-        <div className="p-6 text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-            <LockIcon />
-          </div>
-          <h3 className="text-xl font-extrabold text-slate-900">Unlock your full resume package</h3>
-          <p className="mt-2 text-sm leading-relaxed text-slate-600">
-            Full resume · Cover letter · Why you&apos;re a strong fit · 3 interview answers
-          </p>
-          <div className="my-5 flex items-baseline justify-center gap-1">
-            <span className="text-4xl font-extrabold text-slate-900">$2.99</span>
-            <span className="text-sm text-slate-500">one-time</span>
-          </div>
-          {/* Stripe wired in Day 5 */}
-          <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-500 py-4 text-base font-bold text-white shadow-md transition-all hover:bg-green-600 active:scale-[0.98]">
-            Unlock Now &rarr;
-          </button>
-          <p className="mt-4 text-xs text-slate-400">
-            Instant delivery &nbsp;·&nbsp; One-time payment &nbsp;·&nbsp; No subscription
-          </p>
-        </div>
-      </div>
+        </>
+      )}
     </section>
   )
 }
@@ -702,6 +843,22 @@ function Home() {
   const [isLoading,      setIsLoading]      = useState(false)
   const [resume,         setResume]         = useState(null)
   const [apiError,       setApiError]       = useState('')
+  const [hasPaid,        setHasPaid]        = useState(false)
+
+  // On return from Stripe, restore resume from localStorage and mark as paid
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('paid') === '1') {
+      try {
+        const saved = localStorage.getItem('resumeai_resume')
+        if (saved) {
+          setResume(JSON.parse(saved))
+          setHasPaid(true)
+        }
+      } catch {}
+      window.history.replaceState({}, '', '/')
+    }
+  }, [])
 
   const handleSubmit = async () => {
     setIsLoading(true)
@@ -748,7 +905,7 @@ function Home() {
           </div>
         )}
 
-        <PreviewSection resume={resume} />
+        <PreviewSection resume={resume} hasPaid={hasPaid} />
       </main>
     </div>
   )

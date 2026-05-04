@@ -1,6 +1,7 @@
 {
   "type": "module",
   "dependencies": {
-    "openai": "^6.35.0"
+    "openai": "^6.35.0",
+    "stripe": "^17.0.0"
   }
 }

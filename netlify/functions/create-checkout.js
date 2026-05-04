@@ -1,26 +1,51 @@
-// Netlify Function: /.netlify/functions/create-checkout
-// Day 5 (Task 11): create Stripe Checkout session for $2.99, return checkout URL.
+import Stripe from 'stripe'
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Content-Type': 'application/json',
+}
+
+function respond(statusCode, body) {
+  return { statusCode, headers: CORS, body: JSON.stringify(body) }
+}
 
 export async function handler(event) {
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ error: 'Method not allowed' }),
-    }
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' }
+  if (event.httpMethod !== 'POST') return respond(405, { error: 'Method not allowed' })
+
+  const stripeKey = process.env.STRIPE_SECRET_KEY
+  if (!stripeKey) return respond(500, { error: 'Stripe is not configured' })
+
+  const stripe = new Stripe(stripeKey)
+
+  // process.env.URL is set automatically by Netlify in production
+  const siteUrl = process.env.URL || 'http://localhost:8888'
+
+  let session
+  try {
+    session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: 'ResumeAI — Full Package',
+              description: 'Complete resume · Tailored cover letter · Interview prep answers',
+            },
+            unit_amount: 299,
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${siteUrl}/`,
+    })
+  } catch (err) {
+    return respond(500, { error: `Stripe error: ${err.message}` })
   }
 
-  // TODO (Day 5):
-  //   1. import Stripe from 'stripe' and init with process.env.STRIPE_SECRET_KEY
-  //   2. Create Checkout Session: mode='payment', $2.99 line item
-  //   3. success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}`
-  //   4. cancel_url: `${siteUrl}/`
-  //   5. Return { url: session.url }
-
-  return {
-    statusCode: 501,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      error: 'Not implemented yet — wire up on Day 5.',
-    }),
-  }
+  return respond(200, { url: session.url })
 }

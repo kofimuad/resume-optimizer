@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
+import api from '../lib/api'
 
 const PREFILL =
   'I managed a team of __ people. I was responsible for __. I handled __.'
@@ -12,37 +13,6 @@ const CHIPS = [
   { label: 'Admin',           append: 'I handled administrative duties and documentation. ' },
 ]
 
-const MOCK_RESUME = {
-  summary:
-    'Results-driven operations leader with 8+ years of experience managing cross-functional teams and coordinating complex logistics in high-pressure, mission-critical environments. Proven ability to lead diverse personnel, drive process improvements, and deliver measurable outcomes on time and within budget. Seeking to leverage military leadership expertise in a civilian operations or project management role.',
-
-  experienceTitle:   'Operations Supervisor',
-  experienceCompany: 'U.S. Army',
-  experiencePeriod:  '2016 – 2024',
-  experienceBullets: [
-    'Led a team of 12 personnel across daily operations, ensuring 100% mission readiness and zero safety incidents over 3 years.',
-    'Coordinated logistics and maintenance for $2.4M in equipment inventory, achieving a 0% loss rate across all assigned assets.',
-    'Developed and delivered onboarding training for 40+ new team members, reducing ramp-up time by 30%.',
-    'Managed administrative documentation for 150+ personnel files with a 98% accuracy rating during annual compliance audits.',
-  ],
-
-  coreSkills: [
-    'Team Leadership & Personnel Management',
-    'Logistics & Supply Chain Coordination',
-    'Operations Planning & Execution',
-    'Training Program Development',
-    'Equipment & Inventory Management',
-    'Risk Assessment & Mitigation',
-    'Administrative & Compliance Management',
-    'Cross-functional Collaboration',
-  ],
-
-  whyFit: [
-    'Direct experience leading teams and managing operations at scale — maps directly to the posted requirements.',
-    'Track record of process improvement and accountability under resource-constrained, high-stakes conditions.',
-    'Disciplined, adaptable, and results-oriented — qualities refined through service and immediately applicable.',
-  ],
-}
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -575,151 +545,146 @@ function SectionCard({ title, badge, children }) {
   )
 }
 
-function PreviewSection({ show }) {
+function PreviewSection({ resume }) {
   const ref = useRef(null)
 
   useEffect(() => {
-    if (show) {
+    if (resume) {
       setTimeout(() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
     }
-  }, [show])
+  }, [resume])
 
-  if (!show) return null
+  if (!resume) return null
 
-  const visibleBullets = MOCK_RESUME.experienceBullets.slice(0, 2)
-  const hiddenBullets  = MOCK_RESUME.experienceBullets.slice(2)
+  const role           = resume.experience?.[0] ?? {}
+  const allBullets     = role.bullets ?? []
+  const visibleBullets = allBullets.slice(0, 2)
+  const hiddenBullets  = allBullets.slice(2)
+  const coverParas     = (resume.coverLetter ?? '').split(/\n\n+/).filter(Boolean)
 
   return (
     <section ref={ref} id="preview-section" className="px-4 pb-16">
 
-      {/* Section header */}
+      {/* Header */}
       <div className="mb-5 flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Your Resume Preview</h2>
           <p className="text-sm text-slate-500">Free preview · Unlock the full package below</p>
         </div>
-        <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-          Mock data
+        <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+          AI Generated
         </span>
       </div>
 
       {/* ① Professional Summary — fully visible */}
       <SectionCard title="Professional Summary" badge="Visible">
-        <p className="text-sm leading-relaxed text-slate-700">{MOCK_RESUME.summary}</p>
+        <p className="text-sm leading-relaxed text-slate-700">{resume.summary}</p>
       </SectionCard>
 
       {/* ② Professional Experience — first 2 bullets visible, rest blurred */}
       <SectionCard title="Professional Experience" badge="Visible">
         <div className="mb-3">
-          <p className="font-semibold text-slate-800">{MOCK_RESUME.experienceTitle}</p>
+          <p className="font-semibold text-slate-800">{role.title}</p>
           <p className="text-sm text-slate-500">
-            {MOCK_RESUME.experienceCompany} &nbsp;·&nbsp; {MOCK_RESUME.experiencePeriod}
+            {role.company}&nbsp;·&nbsp;{role.period}
           </p>
         </div>
+
         <ul className="space-y-2">
           {visibleBullets.map((b, i) => (
             <li key={i} className="flex gap-2 text-sm text-slate-700">
-              <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
+              <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
               {b}
             </li>
           ))}
         </ul>
 
-        {/* Blurred remaining bullets with gradient fade */}
-        <div className="relative mt-2 overflow-hidden">
-          <ul className="pointer-events-none select-none space-y-2 blur-sm">
-            {hiddenBullets.map((b, i) => (
-              <li key={i} className="flex gap-2 text-sm text-slate-700">
-                <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
-                {b}
-              </li>
-            ))}
-          </ul>
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white" />
-        </div>
+        {hiddenBullets.length > 0 && (
+          <div className="relative mt-2 overflow-hidden">
+            <ul className="pointer-events-none select-none space-y-2 blur-sm">
+              {hiddenBullets.map((b, i) => (
+                <li key={i} className="flex gap-2 text-sm text-slate-700">
+                  <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
+                  {b}
+                </li>
+              ))}
+            </ul>
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white" />
+          </div>
+        )}
       </SectionCard>
 
-      {/* ③ Locked content — blurred teaser */}
+      {/* ③ Locked content — real AI data, blurred */}
       <div className="relative mb-4 overflow-hidden rounded-2xl">
         <div className="pointer-events-none select-none space-y-4 blur-sm">
-          {/* Core Skills teaser */}
+
+          {/* Core Skills */}
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Core Skills</p>
             <div className="flex flex-wrap gap-2">
-              {MOCK_RESUME.coreSkills.map(s => (
-                <span key={s} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">
+              {(resume.coreSkills ?? []).map((s, i) => (
+                <span key={i} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">
                   {s}
                 </span>
               ))}
             </div>
           </div>
-          {/* Why You're a Strong Fit teaser */}
+
+          {/* Why Strong Fit */}
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Why You Are a Strong Fit</p>
             <ul className="space-y-2">
-              {MOCK_RESUME.whyFit.map((b, i) => (
+              {(resume.whyStrongFit ?? []).map((b, i) => (
                 <li key={i} className="flex gap-2 text-sm text-slate-700">
-                  <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-green-500" />
+                  <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-green-500" />
                   {b}
                 </li>
               ))}
             </ul>
           </div>
-          {/* Cover Letter + Interview Prep placeholder rows */}
+
+          {/* Cover Letter — show first paragraph blurred */}
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Tailored Cover Letter</p>
-            <div className="space-y-2">
-              {[100, 90, 95, 70].map(w => (
-                <div key={w} className="h-3 rounded bg-slate-200" style={{ width: `${w}%` }} />
-              ))}
-            </div>
+            <p className="text-sm leading-relaxed text-slate-700">{coverParas[0]}</p>
+            {coverParas.length > 1 && (
+              <p className="mt-2 text-sm leading-relaxed text-slate-700">{coverParas[1]}</p>
+            )}
           </div>
+
+          {/* Interview Prep — show questions blurred */}
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Interview Prep (3 answers)</p>
-            <div className="space-y-2">
-              {[80, 100, 85].map(w => (
-                <div key={w} className="h-3 rounded bg-slate-200" style={{ width: `${w}%` }} />
+            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Interview Prep (3 answers)</p>
+            <ul className="space-y-3">
+              {(resume.interviewPrep ?? []).map((qa, i) => (
+                <li key={i} className="text-sm font-medium text-slate-700">{qa.question}</li>
               ))}
-            </div>
+            </ul>
           </div>
         </div>
-        {/* Top-to-bottom gradient overlay */}
+
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-50/10 via-slate-50/60 to-slate-50" />
       </div>
 
       {/* ④ CTA banner */}
       <div className="overflow-hidden rounded-2xl border-2 border-blue-600 bg-white shadow-lg">
-        {/* Top accent stripe */}
         <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 to-green-500" />
-
         <div className="p-6 text-center">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-blue-600">
             <LockIcon />
           </div>
-
-          <h3 className="text-xl font-extrabold text-slate-900">
-            Unlock your full resume package
-          </h3>
+          <h3 className="text-xl font-extrabold text-slate-900">Unlock your full resume package</h3>
           <p className="mt-2 text-sm leading-relaxed text-slate-600">
             Full resume · Cover letter · Why you&apos;re a strong fit · 3 interview answers
           </p>
-
           <div className="my-5 flex items-baseline justify-center gap-1">
             <span className="text-4xl font-extrabold text-slate-900">$2.99</span>
             <span className="text-sm text-slate-500">one-time</span>
           </div>
-
-          {/* Unlock Now button — Stripe wired in Day 5 */}
-          <button
-            className="
-              flex w-full items-center justify-center gap-2 rounded-xl
-              bg-green-500 py-4 text-base font-bold text-white shadow-md
-              transition-all hover:bg-green-600 active:scale-[0.98]
-            "
-          >
+          {/* Stripe wired in Day 5 */}
+          <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-500 py-4 text-base font-bold text-white shadow-md transition-all hover:bg-green-600 active:scale-[0.98]">
             Unlock Now &rarr;
           </button>
-
           <p className="mt-4 text-xs text-slate-400">
             Instant delivery &nbsp;·&nbsp; One-time payment &nbsp;·&nbsp; No subscription
           </p>
@@ -732,19 +697,31 @@ function PreviewSection({ show }) {
 // ─── Home ─────────────────────────────────────────────────────────────────────
 
 function Home() {
-  const [experience,      setExperience]      = useState(PREFILL)
-  const [jobDescription,  setJobDescription]  = useState('')
-  const [isLoading,       setIsLoading]       = useState(false)
-  const [showPreview,     setShowPreview]     = useState(false)
+  const [experience,     setExperience]     = useState(PREFILL)
+  const [jobDescription, setJobDescription] = useState('')
+  const [isLoading,      setIsLoading]      = useState(false)
+  const [resume,         setResume]         = useState(null)
+  const [apiError,       setApiError]       = useState('')
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setIsLoading(true)
-    setShowPreview(false)
-    // Simulate AI response time — replaced with real API call in Task 9
-    setTimeout(() => {
+    setResume(null)
+    setApiError('')
+
+    try {
+      const { data } = await api.post('/generate', {
+        experience:     experience.trim(),
+        jobDescription: jobDescription.trim(),
+      })
+      setResume(data.resume)
+    } catch (err) {
+      const msg =
+        err?.response?.data?.error ??
+        (err?.code === 'ECONNABORTED' ? 'Request timed out — please try again.' : 'Something went wrong. Please try again.')
+      setApiError(msg)
+    } finally {
       setIsLoading(false)
-      setShowPreview(true)
-    }, 2000)
+    }
   }
 
   return (
@@ -764,10 +741,14 @@ function Home() {
           isLoading={isLoading}
         />
 
-        <PreviewSection show={showPreview} />
+        {/* API-level error (network failure, OpenAI error, etc.) */}
+        {apiError && (
+          <div className="mx-4 mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <span className="font-semibold">Error: </span>{apiError}
+          </div>
+        )}
 
-        {/* placeholder kept for router compatibility */}
-        <div id="preview-section-anchor" />
+        <PreviewSection resume={resume} />
       </main>
     </div>
   )

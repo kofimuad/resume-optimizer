@@ -1,7 +1,1 @@
-{
-  "type": "module",
-  "dependencies": {
-    "openai": "^4.103.0",
-    "stripe": "^17.0.0"
-  }
-}
+{ "type": "module" }

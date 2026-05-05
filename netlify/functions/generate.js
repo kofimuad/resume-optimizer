@@ -1,4 +1,5 @@
 import OpenAI from 'openai'
+// import Anthropic from '@anthropic-ai/sdk' // Claude alternative — swap package.json dep + ANTHROPIC_API_KEY env var to use
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -152,13 +153,16 @@ export async function handler(event) {
 
   const openai = new OpenAI({ apiKey })
 
+  // Claude alternative (comment out the OpenAI block above and uncomment below):
+  // const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
   let raw
   try {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       response_format: { type: 'json_object' },
-      temperature: 0.6,   // lower = more consistent section coverage
-      max_tokens: 4000,   // enough for all 7 sections in full
+      temperature: 0.6,
+      max_tokens: 4000,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user',   content: buildUserPrompt(experience.trim(), jobDescription.trim()) },
@@ -166,6 +170,15 @@ export async function handler(event) {
     })
 
     raw = completion.choices[0].message.content
+
+    // Claude alternative response extraction:
+    // const message = await client.messages.create({
+    //   model: 'claude-haiku-4-5',
+    //   max_tokens: 4000,
+    //   system: SYSTEM_PROMPT,
+    //   messages: [{ role: 'user', content: buildUserPrompt(experience.trim(), jobDescription.trim()) }],
+    // })
+    // raw = message.content[0].text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
   } catch (err) {
     const msg = err?.message ?? String(err)
     const status = msg.includes('401') ? 401

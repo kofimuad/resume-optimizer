@@ -5,6 +5,10 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[functions]
+  node_bundler = "esbuild"
+  timeout = 26
+
 [dev]
   command = "npm run dev"
   targetPort = 5173

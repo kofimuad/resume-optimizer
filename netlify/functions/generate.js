@@ -155,7 +155,7 @@ export async function handler(event) {
   let raw
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-4o-mini',
       response_format: { type: 'json_object' },
       temperature: 0.6,   // lower = more consistent section coverage
       max_tokens: 4000,   // enough for all 7 sections in full

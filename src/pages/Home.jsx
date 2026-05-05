@@ -600,6 +600,14 @@ function DocumentEditor({ resume }) {
   const [info,          setInfo]          = useState({ name: '', email: '', phone: '', location: '', linkedin: '', github: '' })
   const [generatingPDF, setGeneratingPDF] = useState(false)
 
+  // Optional resume sections
+  const [showEd,     setShowEd]     = useState(false)
+  const [education,  setEducation]  = useState([{ school: '', degree: '', dates: '', coursework: '' }])
+  const [showProj,   setShowProj]   = useState(false)
+  const [projects,   setProjects]   = useState([{ name: '', description: '', tech: '', link: '' }])
+  const [showRef,    setShowRef]    = useState(false)
+  const [references, setReferences] = useState('')
+
   const paperRef       = useRef(null)
   const summaryRef     = useRef(null)
   const skillsRef      = useRef(null)
@@ -614,39 +622,234 @@ function DocumentEditor({ resume }) {
   function getText(ref, fallback = '') {
     return ref.current?.innerText?.trim() ?? fallback
   }
+  function updateEd(i, key, val)   { setEducation(prev => prev.map((e, j) => j === i ? { ...e,  [key]: val } : e)) }
+  function updateProj(i, key, val) { setProjects(prev  => prev.map((p, j) => j === i ? { ...p,  [key]: val } : p)) }
+
+  function docFilename(ext) {
+    const base   = info.name || 'document'
+    const suffix = docType === 'resume' ? 'Resume' : docType === 'coverletter' ? 'Cover-Letter' : 'Interview-Prep'
+    return `${base}-${suffix}.${ext}`
+  }
+
+  // ── Programmatic PDF builders ────────────────────────────────────────────────
+
+  async function buildResumePDF() {
+    const { default: jsPDF } = await import('jspdf')
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' })
+    const margin = 54; const pageW = 612; const usableW = pageW - margin * 2
+    let y = 54
+
+    const checkY2  = need => { if (y + need > 792 - margin) { doc.addPage(); y = margin } }
+    const heading2 = label => {
+      checkY2(24); doc.setFont('times', 'bold'); doc.setFontSize(11); doc.text(label.toUpperCase(), margin, y)
+      y += 4; doc.setLineWidth(0.75); doc.line(margin, y, pageW - margin, y); y += 12
+    }
+    const body2 = (text, indent = 0, size = 11, style = 'normal', leading = 14) => {
+      if (!text) return
+      doc.setFont('times', style); doc.setFontSize(size)
+      doc.splitTextToSize(text, usableW - indent).forEach(line => { checkY2(leading); doc.text(line, margin + indent, y); y += leading })
+    }
+
+    // Header
+    doc.setFont('times', 'bold'); doc.setFontSize(18)
+    doc.text(info.name || 'Your Name', pageW / 2, y, { align: 'center' }); y += 24
+    const contact = [info.location, info.phone, info.email].filter(Boolean).join(' · ')
+    if (contact) { doc.setFont('times', 'normal'); doc.setFontSize(10); doc.text(contact, pageW / 2, y, { align: 'center' }); y += 14 }
+    const links = [info.linkedin, info.github].filter(Boolean).join(' · ')
+    if (links)   { doc.setFont('times', 'normal'); doc.setFontSize(10); doc.text(links,   pageW / 2, y, { align: 'center' }); y += 14 }
+    y += 6
+
+    // Summary
+    heading2('Professional Summary')
+    body2(getText(summaryRef, resume.summary))
+    y += 6
+
+    // Skills
+    heading2('Core Skills')
+    body2(getText(skillsRef, (resume.coreSkills ?? []).join(' · ')))
+    y += 6
+
+    // Experience
+    heading2('Professional Experience')
+    ;(resume.experience ?? []).forEach((role, i) => {
+      const rawBullets = expBulletsRefs.current[i]?.innerText ?? ''
+      const bullets = rawBullets.split('\n').map(s => s.trim()).filter(Boolean)
+      checkY2(42)
+      doc.setFont('times', 'bold'); doc.setFontSize(11)
+      doc.text(role.title, margin, y)
+      doc.setFont('times', 'normal'); doc.setFontSize(10)
+      doc.text(role.period, pageW - margin, y, { align: 'right' })
+      y += 14
+      doc.setFont('times', 'italic'); doc.setFontSize(10)
+      doc.text(role.company, margin, y); y += 14
+      doc.setFont('times', 'normal'); doc.setFontSize(11)
+      bullets.forEach(b => {
+        const bLines = doc.splitTextToSize(`• ${b}`, usableW - 10)
+        bLines.forEach((line, li) => { checkY2(14); doc.text(line, margin + (li > 0 ? 12 : 0), y); y += 14 })
+      })
+      y += 6
+    })
+
+    // Education (optional)
+    if (showEd && education.some(e => e.school || e.degree)) {
+      heading2('Education')
+      education.filter(e => e.school || e.degree).forEach(ed => {
+        checkY2(28)
+        doc.setFont('times', 'bold'); doc.setFontSize(11)
+        doc.text(ed.degree || '', margin, y)
+        if (ed.dates) { doc.setFont('times', 'normal'); doc.setFontSize(10); doc.text(ed.dates, pageW - margin, y, { align: 'right' }) }
+        y += 14
+        if (ed.school) { doc.setFont('times', 'italic'); doc.setFontSize(10); doc.text(ed.school, margin, y); y += 14 }
+        if (ed.coursework) body2(`Relevant Coursework: ${ed.coursework}`, 0, 10, 'normal', 13)
+        y += 4
+      })
+    }
+
+    // Projects (optional)
+    if (showProj && projects.some(p => p.name)) {
+      heading2('Projects')
+      projects.filter(p => p.name).forEach(proj => {
+        checkY2(28)
+        doc.setFont('times', 'bold'); doc.setFontSize(11)
+        doc.text(proj.name, margin, y)
+        if (proj.tech) { doc.setFont('times', 'normal'); doc.setFontSize(10); doc.text(proj.tech, pageW - margin, y, { align: 'right' }) }
+        y += 14
+        if (proj.description) {
+          const bLines = doc.splitTextToSize(`• ${proj.description}`, usableW - 10)
+          bLines.forEach((line, li) => { checkY2(14); doc.text(line, margin + (li > 0 ? 12 : 0), y); y += 14 })
+        }
+        if (proj.link) { doc.setFont('times', 'normal'); doc.setFontSize(10); doc.text(proj.link, margin, y); y += 13 }
+        y += 4
+      })
+    }
+
+    // References (optional)
+    if (showRef && references.trim()) {
+      heading2('References')
+      body2(references)
+    }
+
+    doc.save(docFilename('pdf'))
+  }
+
+  async function buildCoverLetterPDF() {
+    const { default: jsPDF } = await import('jspdf')
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' })
+    const margin = 54; const pageW = 612; const pageH = 792; const usableW = pageW - margin * 2
+    let y = margin
+    const checkY = need => { if (y + need > pageH - margin) { doc.addPage(); y = margin } }
+    const heading = label => {
+      checkY(24); doc.setFont('times', 'bold'); doc.setFontSize(11); doc.text(label.toUpperCase(), margin, y)
+      y += 4; doc.setLineWidth(0.75); doc.line(margin, y, pageW - margin, y); y += 12
+    }
+    doc.setFont('times', 'bold'); doc.setFontSize(18)
+    doc.text(info.name || 'Your Name', pageW / 2, y, { align: 'center' }); y += 24
+    const contact = [info.location, info.phone, info.email].filter(Boolean).join(' · ')
+    if (contact) { doc.setFont('times', 'normal'); doc.setFontSize(10); doc.text(contact, pageW / 2, y, { align: 'center' }); y += 14 }
+    const links = [info.linkedin, info.github].filter(Boolean).join(' · ')
+    if (links)   { doc.setFont('times', 'normal'); doc.setFontSize(10); doc.text(links,   pageW / 2, y, { align: 'center' }); y += 14 }
+    y += 6
+    heading('Cover Letter')
+    const coverText = getText(coverRef, resume.coverLetter ?? '')
+    coverText.split(/\n\n+/).filter(Boolean).forEach(para => {
+      doc.setFont('times', 'normal'); doc.setFontSize(11)
+      doc.splitTextToSize(para, usableW).forEach(line => { checkY(14); doc.text(line, margin, y); y += 14 })
+      y += 6
+    })
+    const fitText = getText(fitRef)
+    if (fitText) {
+      heading('Why You Are a Strong Fit')
+      fitText.split('\n').map(s => s.trim()).filter(Boolean).forEach(b => {
+        const bLines = doc.splitTextToSize(`• ${b}`, usableW - 10)
+        bLines.forEach((line, li) => { checkY(14); doc.text(line, margin + (li > 0 ? 12 : 0), y); y += 14 })
+      })
+    }
+    doc.save(docFilename('pdf'))
+  }
+
+  async function buildInterviewPDF() {
+    const { default: jsPDF } = await import('jspdf')
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' })
+    const margin = 54; const pageW = 612; const pageH = 792; const usableW = pageW - margin * 2
+    let y = margin
+    const checkY = need => { if (y + need > pageH - margin) { doc.addPage(); y = margin } }
+    doc.setFont('times', 'bold'); doc.setFontSize(16)
+    doc.text('Interview Preparation Guide', pageW / 2, y, { align: 'center' }); y += 24
+    if (info.name) { doc.setFont('times', 'normal'); doc.setFontSize(10); doc.text(`Prepared for: ${info.name}`, pageW / 2, y, { align: 'center' }); y += 14 }
+    y += 8
+    doc.setFont('times', 'bold'); doc.setFontSize(11)
+    doc.text('INTERVIEW QUESTIONS & ANSWERS', margin, y); y += 4
+    doc.setLineWidth(0.75); doc.line(margin, y, pageW - margin, y); y += 14
+    ;(resume.interviewPrep ?? []).forEach(qa => {
+      checkY(28)
+      doc.setFont('times', 'bold'); doc.setFontSize(11)
+      doc.splitTextToSize(`Q: ${qa.question}`, usableW).forEach(line => { checkY(14); doc.text(line, margin, y); y += 14 })
+      y += 4
+      doc.setFont('times', 'normal'); doc.setFontSize(11)
+      doc.splitTextToSize(`A: ${qa.answer}`, usableW).forEach(line => { checkY(14); doc.text(line, margin, y); y += 14 })
+      y += 10
+    })
+    doc.save(docFilename('pdf'))
+  }
+
+  const handlePDF = async () => {
+    setGeneratingPDF(true)
+    try {
+      if (docType === 'resume')           await buildResumePDF()
+      else if (docType === 'coverletter') await buildCoverLetterPDF()
+      else                                await buildInterviewPDF()
+    } catch { alert('Could not generate PDF — please try again.') }
+    finally { setGeneratingPDF(false) }
+  }
+
+  // ── Word HTML builders ───────────────────────────────────────────────────────
 
   function buildResumeHTML() {
-    const contact  = [info.location, info.phone, info.email].filter(Boolean).join(' · ')
-    const links    = [info.linkedin, info.github].filter(Boolean).join(' · ')
-    const summary  = getText(summaryRef, resume.summary)
-    const skills   = getText(skillsRef,  (resume.coreSkills ?? []).join(' · '))
-    const exps     = (resume.experience ?? []).map((role, i) => {
+    const contact = [info.location, info.phone, info.email].filter(Boolean).join(' · ')
+    const links   = [info.linkedin, info.github].filter(Boolean).join(' · ')
+    const summary = getText(summaryRef, resume.summary)
+    const skills  = getText(skillsRef, (resume.coreSkills ?? []).join(' · '))
+    const expHTML = (resume.experience ?? []).map((role, i) => {
       const bullets = (expBulletsRefs.current[i]?.innerText ?? '').split('\n').map(s => s.trim()).filter(Boolean)
-      return { ...role, bullets }
-    })
-    const expHTML  = exps.map(r => `
-      <div style="display:flex;justify-content:space-between;margin-bottom:2pt">
-        <strong>${r.title}</strong><span style="font-size:10pt">${r.period}</span>
-      </div>
-      <em style="font-size:10pt">${r.company}</em>
-      <ul style="margin:4pt 0;padding-left:16pt">${r.bullets.map(b => `<li style="margin:2pt 0">${b}</li>`).join('')}</ul>
-    `).join('')
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Resume — ${info.name}</title><style>${BASE_CSS}</style></head><body>
+      return `<div style="display:flex;justify-content:space-between;margin-bottom:2pt"><strong>${role.title}</strong><span style="font-size:10pt">${role.period}</span></div>
+        <em style="font-size:10pt">${role.company}</em>
+        <ul style="margin:4pt 0;padding-left:16pt">${bullets.map(b => `<li style="margin:2pt 0">${b}</li>`).join('')}</ul>`
+    }).join('')
+    let optHTML = ''
+    if (showEd && education.some(e => e.school || e.degree)) {
+      optHTML += SEC('Education')
+      education.filter(e => e.school || e.degree).forEach(ed => {
+        optHTML += `<div style="display:flex;justify-content:space-between"><strong>${ed.degree || ''}</strong><span style="font-size:10pt">${ed.dates || ''}</span></div>`
+        if (ed.school)     optHTML += `<div><em style="font-size:10pt">${ed.school}</em></div>`
+        if (ed.coursework) optHTML += `<p style="font-size:10pt;margin:3pt 0">Relevant Coursework: ${ed.coursework}</p>`
+      })
+    }
+    if (showProj && projects.some(p => p.name)) {
+      optHTML += SEC('Projects')
+      projects.filter(p => p.name).forEach(proj => {
+        optHTML += `<div style="display:flex;justify-content:space-between"><strong>${proj.name}</strong><span style="font-size:10pt">${proj.tech || ''}</span></div>`
+        if (proj.description) optHTML += `<ul style="margin:4pt 0;padding-left:16pt"><li>${proj.description}</li></ul>`
+        if (proj.link)        optHTML += `<p style="font-size:10pt;margin:2pt 0">${proj.link}</p>`
+      })
+    }
+    if (showRef && references.trim()) optHTML += SEC('References') + `<p>${references}</p>`
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Resume</title><style>${BASE_CSS}</style></head><body>
       ${HEADER(info.name, contact, links)}
       ${SEC('Professional Summary')}<p>${summary}</p>
       ${SEC('Core Skills')}<p>${skills}</p>
       ${SEC('Professional Experience')}${expHTML}
+      ${optHTML}
     </body></html>`
   }
 
   function buildCoverLetterHTML() {
-    const contact    = [info.location, info.phone, info.email].filter(Boolean).join(' · ')
-    const links      = [info.linkedin, info.github].filter(Boolean).join(' · ')
-    const cover      = getText(coverRef, resume.coverLetter ?? '')
-    const fit        = getText(fitRef)
-    const coverHTML  = cover.split('\n').filter(Boolean).map(p => `<p style="margin:6pt 0">${p}</p>`).join('')
-    const fitHTML    = fit.split('\n').filter(Boolean).map(b => `<li style="margin:3pt 0">${b}</li>`).join('')
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Cover Letter — ${info.name}</title><style>${BASE_CSS}</style></head><body>
+    const contact  = [info.location, info.phone, info.email].filter(Boolean).join(' · ')
+    const links    = [info.linkedin, info.github].filter(Boolean).join(' · ')
+    const cover    = getText(coverRef, resume.coverLetter ?? '')
+    const fit      = getText(fitRef)
+    const coverHTML = cover.split('\n').filter(Boolean).map(p => `<p style="margin:6pt 0">${p}</p>`).join('')
+    const fitHTML   = fit.split('\n').filter(Boolean).map(b => `<li style="margin:3pt 0">${b}</li>`).join('')
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Cover Letter</title><style>${BASE_CSS}</style></head><body>
       ${HEADER(info.name, contact, links)}
       ${SEC('Cover Letter')}${coverHTML}
       ${fitHTML ? SEC('Why You Are a Strong Fit') + `<ul>${fitHTML}</ul>` : ''}
@@ -656,7 +859,7 @@ function DocumentEditor({ resume }) {
   function buildInterviewHTML() {
     const interview = getText(interviewRef)
     const intHTML   = interview.split('\n').filter(Boolean).map(l => `<p style="margin:4pt 0">${l}</p>`).join('')
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Interview Prep — ${info.name}</title><style>${BASE_CSS}</style></head><body>
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Interview Prep</title><style>${BASE_CSS}</style></head><body>
       <h1 style="text-align:center;font-size:18pt;margin:0 0 4pt;font-weight:bold">Interview Preparation Guide</h1>
       ${info.name ? `<p style="text-align:center;font-size:10pt;margin:0 0 2pt">Prepared for: ${info.name}</p>` : ''}
       ${SEC('Interview Questions & Answers')}${intHTML}
@@ -669,42 +872,6 @@ function DocumentEditor({ resume }) {
     return buildInterviewHTML()
   }
 
-  function docFilename(ext) {
-    const base = info.name || 'document'
-    const suffix = docType === 'resume' ? 'Resume' : docType === 'coverletter' ? 'Cover-Letter' : 'Interview-Prep'
-    return `${base}-${suffix}.${ext}`
-  }
-
-  const handlePDF = async () => {
-    const el = paperRef.current
-    if (!el) return
-    setGeneratingPDF(true)
-    try {
-      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-        import('html2canvas'),
-        import('jspdf'),
-      ])
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, logging: false })
-      const imgData = canvas.toDataURL('image/png')
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const pdfW = pdf.internal.pageSize.getWidth()
-      const pdfH = pdf.internal.pageSize.getHeight()
-      const imgH = (canvas.height * pdfW) / canvas.width
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfW, imgH)
-      let remaining = imgH - pdfH
-      while (remaining > 0) {
-        pdf.addPage()
-        pdf.addImage(imgData, 'PNG', 0, -(imgH - remaining), pdfW, imgH)
-        remaining -= pdfH
-      }
-      pdf.save(docFilename('pdf'))
-    } catch {
-      alert('Could not generate PDF — please try again.')
-    } finally {
-      setGeneratingPDF(false)
-    }
-  }
-
   const handleWord = () => {
     const blob = new Blob([buildHTML()], { type: 'application/vnd.ms-word' })
     const url  = URL.createObjectURL(blob)
@@ -713,8 +880,9 @@ function DocumentEditor({ resume }) {
     URL.revokeObjectURL(url)
   }
 
-  const inputCls = 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400'
-  const editCls  = 'text-sm text-slate-800 outline-none rounded px-1 -mx-1 focus:bg-blue-50/40 focus:ring-1 focus:ring-blue-200'
+  const inputCls  = 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400'
+  const editCls   = 'text-sm text-slate-800 outline-none rounded px-1 -mx-1 focus:bg-blue-50/40 focus:ring-1 focus:ring-blue-200'
+  const addBtnCls = 'rounded-full border border-dashed border-slate-300 px-3 py-1 text-xs font-medium text-slate-500 hover:border-blue-400 hover:text-blue-600 transition-all'
 
   return (
     <div>
@@ -724,9 +892,9 @@ function DocumentEditor({ resume }) {
           Your Personal Details — shared across all documents
         </p>
         <div className="grid grid-cols-2 gap-2">
-          <input placeholder="Full Name *"             {...field('name')}     className={`col-span-2 ${inputCls}`} />
-          <input placeholder="Email"                   {...field('email')}    className={inputCls} />
-          <input placeholder="Phone"                   {...field('phone')}    className={inputCls} />
+          <input placeholder="Full Name *"              {...field('name')}     className={`col-span-2 ${inputCls}`} />
+          <input placeholder="Email"                    {...field('email')}    className={inputCls} />
+          <input placeholder="Phone"                    {...field('phone')}    className={inputCls} />
           <input placeholder="Location (City, Country)" {...field('location')} className={`col-span-2 ${inputCls}`} />
           <input placeholder="LinkedIn URL"             {...field('linkedin')} className={inputCls} />
           <input placeholder="GitHub / Portfolio URL"   {...field('github')}   className={inputCls} />
@@ -791,10 +959,10 @@ function DocumentEditor({ resume }) {
                className={editCls}
                dangerouslySetInnerHTML={{ __html: (resume.coreSkills ?? []).join(' · ') }} />
 
+            <DocHeading>Professional Experience</DocHeading>
             {(resume.experience ?? []).map((role, i) => (
-              <div key={i}>
-                <DocHeading>Professional Experience</DocHeading>
-                <div className="mb-1 flex items-baseline justify-between">
+              <div key={i} className="mb-5">
+                <div className="mb-0.5 flex items-baseline justify-between">
                   <span className="text-sm font-bold text-slate-800">{role.title}</span>
                   <span className="text-xs text-slate-500">{role.period}</span>
                 </div>
@@ -805,6 +973,76 @@ function DocumentEditor({ resume }) {
                     dangerouslySetInnerHTML={{ __html: (role.bullets ?? []).map(b => `<li>${b}</li>`).join('') }} />
               </div>
             ))}
+
+            {/* ── Optional: Education ── */}
+            {showEd && (
+              <>
+                <DocHeading>Education</DocHeading>
+                {education.map((ed, i) => (
+                  <div key={i} className="mb-4">
+                    <div className="grid grid-cols-2 gap-1.5 mb-1.5">
+                      <input placeholder="Degree / Major *"               value={ed.degree}     onChange={e => updateEd(i, 'degree',     e.target.value)} className={inputCls} />
+                      <input placeholder="Dates (e.g. 2018–2022)"         value={ed.dates}      onChange={e => updateEd(i, 'dates',      e.target.value)} className={inputCls} />
+                      <input placeholder="School / University *"          value={ed.school}     onChange={e => updateEd(i, 'school',     e.target.value)} className={`col-span-2 ${inputCls}`} />
+                      <input placeholder="Relevant Coursework (optional)" value={ed.coursework} onChange={e => updateEd(i, 'coursework', e.target.value)} className={`col-span-2 ${inputCls}`} />
+                    </div>
+                    {education.length > 1 && (
+                      <button onClick={() => setEducation(prev => prev.filter((_, j) => j !== i))}
+                        className="text-xs text-red-400 hover:text-red-600">Remove</button>
+                    )}
+                  </div>
+                ))}
+                <button onClick={() => setEducation(prev => [...prev, { school: '', degree: '', dates: '', coursework: '' }])}
+                  className={addBtnCls}>+ Add another education entry</button>
+              </>
+            )}
+
+            {/* ── Optional: Projects ── */}
+            {showProj && (
+              <>
+                <DocHeading>Projects</DocHeading>
+                {projects.map((proj, i) => (
+                  <div key={i} className="mb-4">
+                    <div className="grid grid-cols-2 gap-1.5 mb-1.5">
+                      <input placeholder="Project Name *"      value={proj.name}        onChange={e => updateProj(i, 'name',        e.target.value)} className={inputCls} />
+                      <input placeholder="Technologies Used"   value={proj.tech}        onChange={e => updateProj(i, 'tech',        e.target.value)} className={inputCls} />
+                      <input placeholder="Brief Description"   value={proj.description} onChange={e => updateProj(i, 'description', e.target.value)} className={`col-span-2 ${inputCls}`} />
+                      <input placeholder="Link (optional)"     value={proj.link}        onChange={e => updateProj(i, 'link',        e.target.value)} className={`col-span-2 ${inputCls}`} />
+                    </div>
+                    {projects.length > 1 && (
+                      <button onClick={() => setProjects(prev => prev.filter((_, j) => j !== i))}
+                        className="text-xs text-red-400 hover:text-red-600">Remove</button>
+                    )}
+                  </div>
+                ))}
+                <button onClick={() => setProjects(prev => [...prev, { name: '', description: '', tech: '', link: '' }])}
+                  className={addBtnCls}>+ Add another project</button>
+              </>
+            )}
+
+            {/* ── Optional: References ── */}
+            {showRef && (
+              <>
+                <DocHeading>References</DocHeading>
+                <textarea
+                  placeholder="List your references here, or write 'Available upon request'"
+                  value={references}
+                  onChange={e => setReferences(e.target.value)}
+                  rows={3}
+                  className={`w-full resize-none ${inputCls}`}
+                />
+              </>
+            )}
+
+            {/* ── Add sections ── */}
+            {(!showEd || !showProj || !showRef) && (
+              <div className="mt-8 flex flex-wrap items-center gap-2 border-t border-dashed border-slate-200 pt-4">
+                <span className="text-xs text-slate-400">Add sections:</span>
+                {!showEd   && <button onClick={() => setShowEd(true)}   className={addBtnCls}>+ Education</button>}
+                {!showProj && <button onClick={() => setShowProj(true)} className={addBtnCls}>+ Projects</button>}
+                {!showRef  && <button onClick={() => setShowRef(true)}  className={addBtnCls}>+ References</button>}
+              </div>
+            )}
           </div>
         )}
 

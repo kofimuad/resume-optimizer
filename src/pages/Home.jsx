@@ -547,90 +547,419 @@ function SectionCard({ title, badge, children }) {
 
 // ─── Full unlocked view ───────────────────────────────────────────────────────
 
+function buildPlainText(resume) {
+  const lines = []
+  lines.push('PROFESSIONAL SUMMARY', resume.summary, '')
+  lines.push('CORE SKILLS', (resume.coreSkills ?? []).join(' · '), '')
+  ;(resume.experience ?? []).forEach(role => {
+    lines.push('PROFESSIONAL EXPERIENCE')
+    lines.push(`${role.title} — ${role.company} (${role.period})`)
+    ;(role.bullets ?? []).forEach(b => lines.push(`• ${b}`))
+    lines.push('')
+  })
+  lines.push('CIVILIAN TRANSLATION')
+  ;(resume.civilianTranslation ?? []).forEach(l => lines.push(`• ${l}`))
+  lines.push('')
+  lines.push('COVER LETTER', resume.coverLetter ?? '', '')
+  lines.push('WHY YOU ARE A STRONG FIT')
+  ;(resume.whyStrongFit ?? []).forEach(b => lines.push(`• ${b}`))
+  lines.push('')
+  lines.push('INTERVIEW PREP')
+  ;(resume.interviewPrep ?? []).forEach(qa => {
+    lines.push(`Q: ${qa.question}`, `A: ${qa.answer}`, '')
+  })
+  return lines.join('\n')
+}
+
+// ─── Document editor ──────────────────────────────────────────────────────────
+
+function DocHeading({ children }) {
+  return (
+    <div className="mb-2 mt-6 border-b border-slate-800 pb-0.5">
+      <p className="text-xs font-bold uppercase tracking-widest text-slate-800">{children}</p>
+    </div>
+  )
+}
+
+const DOC_TABS = [
+  { id: 'resume',      label: 'Resume' },
+  { id: 'coverletter', label: 'Cover Letter' },
+  { id: 'interview',   label: 'Interview Prep' },
+]
+
+const BASE_CSS = `*{box-sizing:border-box}body{font-family:'Times New Roman',serif;margin:.75in;font-size:11pt;color:#000;line-height:1.45}ul{margin:0;padding-left:16pt}li{margin:2pt 0}p{margin:3pt 0}`
+const SEC = label => `<div style="font-size:11pt;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #000;padding-bottom:2pt;margin:14pt 0 5pt">${label}</div>`
+const HEADER = (name, contact, links) => `
+  <h1 style="text-align:center;font-size:18pt;margin:0 0 3pt;font-weight:bold">${name || 'Your Name'}</h1>
+  ${contact ? `<p style="text-align:center;font-size:10pt;margin:2pt 0">${contact}</p>` : ''}
+  ${links   ? `<p style="text-align:center;font-size:10pt;margin:2pt 0">${links}</p>`   : ''}
+`
+
+function DocumentEditor({ resume }) {
+  const [docType,       setDocType]       = useState('resume')
+  const [info,          setInfo]          = useState({ name: '', email: '', phone: '', location: '', linkedin: '', github: '' })
+  const [generatingPDF, setGeneratingPDF] = useState(false)
+
+  const paperRef       = useRef(null)
+  const summaryRef     = useRef(null)
+  const skillsRef      = useRef(null)
+  const expBulletsRefs = useRef([])
+  const coverRef       = useRef(null)
+  const fitRef         = useRef(null)
+  const interviewRef   = useRef(null)
+
+  function field(key) {
+    return { value: info[key], onChange: e => setInfo(p => ({ ...p, [key]: e.target.value })) }
+  }
+  function getText(ref, fallback = '') {
+    return ref.current?.innerText?.trim() ?? fallback
+  }
+
+  function buildResumeHTML() {
+    const contact  = [info.location, info.phone, info.email].filter(Boolean).join(' · ')
+    const links    = [info.linkedin, info.github].filter(Boolean).join(' · ')
+    const summary  = getText(summaryRef, resume.summary)
+    const skills   = getText(skillsRef,  (resume.coreSkills ?? []).join(' · '))
+    const exps     = (resume.experience ?? []).map((role, i) => {
+      const bullets = (expBulletsRefs.current[i]?.innerText ?? '').split('\n').map(s => s.trim()).filter(Boolean)
+      return { ...role, bullets }
+    })
+    const expHTML  = exps.map(r => `
+      <div style="display:flex;justify-content:space-between;margin-bottom:2pt">
+        <strong>${r.title}</strong><span style="font-size:10pt">${r.period}</span>
+      </div>
+      <em style="font-size:10pt">${r.company}</em>
+      <ul style="margin:4pt 0;padding-left:16pt">${r.bullets.map(b => `<li style="margin:2pt 0">${b}</li>`).join('')}</ul>
+    `).join('')
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Resume — ${info.name}</title><style>${BASE_CSS}</style></head><body>
+      ${HEADER(info.name, contact, links)}
+      ${SEC('Professional Summary')}<p>${summary}</p>
+      ${SEC('Core Skills')}<p>${skills}</p>
+      ${SEC('Professional Experience')}${expHTML}
+    </body></html>`
+  }
+
+  function buildCoverLetterHTML() {
+    const contact    = [info.location, info.phone, info.email].filter(Boolean).join(' · ')
+    const links      = [info.linkedin, info.github].filter(Boolean).join(' · ')
+    const cover      = getText(coverRef, resume.coverLetter ?? '')
+    const fit        = getText(fitRef)
+    const coverHTML  = cover.split('\n').filter(Boolean).map(p => `<p style="margin:6pt 0">${p}</p>`).join('')
+    const fitHTML    = fit.split('\n').filter(Boolean).map(b => `<li style="margin:3pt 0">${b}</li>`).join('')
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Cover Letter — ${info.name}</title><style>${BASE_CSS}</style></head><body>
+      ${HEADER(info.name, contact, links)}
+      ${SEC('Cover Letter')}${coverHTML}
+      ${fitHTML ? SEC('Why You Are a Strong Fit') + `<ul>${fitHTML}</ul>` : ''}
+    </body></html>`
+  }
+
+  function buildInterviewHTML() {
+    const interview = getText(interviewRef)
+    const intHTML   = interview.split('\n').filter(Boolean).map(l => `<p style="margin:4pt 0">${l}</p>`).join('')
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Interview Prep — ${info.name}</title><style>${BASE_CSS}</style></head><body>
+      <h1 style="text-align:center;font-size:18pt;margin:0 0 4pt;font-weight:bold">Interview Preparation Guide</h1>
+      ${info.name ? `<p style="text-align:center;font-size:10pt;margin:0 0 2pt">Prepared for: ${info.name}</p>` : ''}
+      ${SEC('Interview Questions & Answers')}${intHTML}
+    </body></html>`
+  }
+
+  function buildHTML() {
+    if (docType === 'resume')      return buildResumeHTML()
+    if (docType === 'coverletter') return buildCoverLetterHTML()
+    return buildInterviewHTML()
+  }
+
+  function docFilename(ext) {
+    const base = info.name || 'document'
+    const suffix = docType === 'resume' ? 'Resume' : docType === 'coverletter' ? 'Cover-Letter' : 'Interview-Prep'
+    return `${base}-${suffix}.${ext}`
+  }
+
+  const handlePDF = async () => {
+    const el = paperRef.current
+    if (!el) return
+    setGeneratingPDF(true)
+    try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ])
+      const canvas = await html2canvas(el, { scale: 2, useCORS: true, logging: false })
+      const imgData = canvas.toDataURL('image/png')
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const pdfW = pdf.internal.pageSize.getWidth()
+      const pdfH = pdf.internal.pageSize.getHeight()
+      const imgH = (canvas.height * pdfW) / canvas.width
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfW, imgH)
+      let remaining = imgH - pdfH
+      while (remaining > 0) {
+        pdf.addPage()
+        pdf.addImage(imgData, 'PNG', 0, -(imgH - remaining), pdfW, imgH)
+        remaining -= pdfH
+      }
+      pdf.save(docFilename('pdf'))
+    } catch {
+      alert('Could not generate PDF — please try again.')
+    } finally {
+      setGeneratingPDF(false)
+    }
+  }
+
+  const handleWord = () => {
+    const blob = new Blob([buildHTML()], { type: 'application/vnd.ms-word' })
+    const url  = URL.createObjectURL(blob)
+    const a    = Object.assign(document.createElement('a'), { href: url, download: docFilename('doc') })
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const inputCls = 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400'
+  const editCls  = 'text-sm text-slate-800 outline-none rounded px-1 -mx-1 focus:bg-blue-50/40 focus:ring-1 focus:ring-blue-200'
+
+  return (
+    <div>
+      {/* Personal info */}
+      <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-blue-700">
+          Your Personal Details — shared across all documents
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <input placeholder="Full Name *"             {...field('name')}     className={`col-span-2 ${inputCls}`} />
+          <input placeholder="Email"                   {...field('email')}    className={inputCls} />
+          <input placeholder="Phone"                   {...field('phone')}    className={inputCls} />
+          <input placeholder="Location (City, Country)" {...field('location')} className={`col-span-2 ${inputCls}`} />
+          <input placeholder="LinkedIn URL"             {...field('linkedin')} className={inputCls} />
+          <input placeholder="GitHub / Portfolio URL"   {...field('github')}   className={inputCls} />
+        </div>
+      </div>
+
+      {/* Document type tabs */}
+      <div className="mb-4 flex gap-1 rounded-xl bg-slate-100 p-1">
+        {DOC_TABS.map(t => (
+          <button key={t.id} onClick={() => setDocType(t.id)}
+            className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-all
+              ${docType === t.id ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Download buttons */}
+      <div className="mb-4 flex items-center gap-2">
+        <button onClick={handlePDF} disabled={generatingPDF}
+          className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold text-white shadow-sm transition active:scale-95 disabled:cursor-not-allowed
+            ${generatingPDF ? 'bg-red-400' : 'bg-red-600 hover:bg-red-700'}`}>
+          {generatingPDF ? <><Spinner /> Generating…</> : '⬇ PDF'}
+        </button>
+        <button onClick={handleWord}
+          className="flex items-center gap-1.5 rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800 active:scale-95">
+          ⬇ Word
+        </button>
+        <span className="ml-auto text-xs text-slate-400">Click any text below to edit</span>
+      </div>
+
+      {/* Document paper */}
+      <div ref={paperRef} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+
+        {/* Shared header */}
+        <div className="border-b border-slate-100 px-10 pb-5 pt-8 text-center">
+          <p className="text-2xl font-bold leading-tight text-slate-900">
+            {info.name || <span className="text-lg font-normal text-slate-300">Enter your name above</span>}
+          </p>
+          {(info.location || info.phone || info.email) && (
+            <p className="mt-1.5 text-sm text-slate-600">
+              {[info.location, info.phone, info.email].filter(Boolean).join(' · ')}
+            </p>
+          )}
+          {(info.linkedin || info.github) && (
+            <p className="mt-0.5 text-sm text-slate-500">
+              {[info.linkedin, info.github].filter(Boolean).join(' · ')}
+            </p>
+          )}
+        </div>
+
+        {/* ── Resume ── */}
+        {docType === 'resume' && (
+          <div className="px-10 pb-10">
+            <DocHeading>Professional Summary</DocHeading>
+            <p ref={summaryRef} contentEditable suppressContentEditableWarning
+               className={`leading-relaxed ${editCls}`}
+               dangerouslySetInnerHTML={{ __html: resume.summary }} />
+
+            <DocHeading>Core Skills</DocHeading>
+            <p ref={skillsRef} contentEditable suppressContentEditableWarning
+               className={editCls}
+               dangerouslySetInnerHTML={{ __html: (resume.coreSkills ?? []).join(' · ') }} />
+
+            {(resume.experience ?? []).map((role, i) => (
+              <div key={i}>
+                <DocHeading>Professional Experience</DocHeading>
+                <div className="mb-1 flex items-baseline justify-between">
+                  <span className="text-sm font-bold text-slate-800">{role.title}</span>
+                  <span className="text-xs text-slate-500">{role.period}</span>
+                </div>
+                <p className="mb-2 text-xs italic text-slate-500">{role.company}</p>
+                <ul ref={el => { expBulletsRefs.current[i] = el }}
+                    contentEditable suppressContentEditableWarning
+                    className={`list-disc space-y-1 pl-5 ${editCls}`}
+                    dangerouslySetInnerHTML={{ __html: (role.bullets ?? []).map(b => `<li>${b}</li>`).join('') }} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Cover Letter ── */}
+        {docType === 'coverletter' && (
+          <div className="px-10 pb-10">
+            <DocHeading>Cover Letter</DocHeading>
+            <div ref={coverRef} contentEditable suppressContentEditableWarning
+                 className={`space-y-3 leading-relaxed ${editCls}`}
+                 dangerouslySetInnerHTML={{ __html: (resume.coverLetter ?? '').split(/\n\n+/).filter(Boolean).map(p => `<p>${p}</p>`).join('') }} />
+
+            <DocHeading>Why You Are a Strong Fit</DocHeading>
+            <ul ref={fitRef} contentEditable suppressContentEditableWarning
+                className={`list-disc space-y-1 pl-5 ${editCls}`}
+                dangerouslySetInnerHTML={{ __html: (resume.whyStrongFit ?? []).map(b => `<li>${b}</li>`).join('') }} />
+          </div>
+        )}
+
+        {/* ── Interview Prep ── */}
+        {docType === 'interview' && (
+          <div className="px-10 pb-10">
+            <p className="mt-6 text-center text-xs font-semibold uppercase tracking-widest text-slate-400">
+              Interview Preparation Guide
+            </p>
+            <div ref={interviewRef} contentEditable suppressContentEditableWarning
+                 className={`mt-4 space-y-4 ${editCls}`}
+                 dangerouslySetInnerHTML={{ __html: (resume.interviewPrep ?? []).map(qa =>
+                   `<p><strong>Q: ${qa.question}</strong></p><p>${qa.answer}</p>`).join('<br>') }} />
+          </div>
+        )}
+
+      </div>
+    </div>
+  )
+}
+
+// ─── Full unlocked view ───────────────────────────────────────────────────────
+
 function FullResume({ resume }) {
+  const [mode,   setMode]   = useState('cards')
+  const [copied, setCopied] = useState(false)
   const coverParas = (resume.coverLetter ?? '').split(/\n\n+/).filter(Boolean)
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(buildPlainText(resume)).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    })
+  }
 
   return (
     <div className="space-y-4">
 
-      {/* ① Professional Summary */}
-      <SectionCard title="Professional Summary">
-        <p className="text-sm leading-relaxed text-slate-700">{resume.summary}</p>
-      </SectionCard>
-
-      {/* ② Core Skills */}
-      <SectionCard title="Core Skills">
-        <div className="flex flex-wrap gap-2">
-          {(resume.coreSkills ?? []).map((s, i) => (
-            <span key={i} className="rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-xs font-medium text-blue-700">
-              {s}
-            </span>
+      {/* View toggle */}
+      <div className="flex items-center gap-2">
+        <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
+          {[['cards', 'Cards'], ['document', 'Document + Download']].map(([id, label]) => (
+            <button key={id} onClick={() => setMode(id)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all
+                ${mode === id ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+              {label}
+            </button>
           ))}
         </div>
-      </SectionCard>
+        {mode === 'cards' && (
+          <button onClick={handleCopy}
+            className={`ml-auto flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold shadow-sm transition-all active:scale-95
+              ${copied ? 'border-green-300 bg-green-50 text-green-700' : 'border-slate-200 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-700'}`}>
+            {copied ? '✓ Copied!' : '⎘ Copy All'}
+          </button>
+        )}
+      </div>
 
-      {/* ③ Professional Experience — all roles, all bullets */}
-      {(resume.experience ?? []).map((role, ri) => (
-        <SectionCard key={ri} title="Professional Experience">
-          <div className="mb-3">
-            <p className="font-semibold text-slate-800">{role.title}</p>
-            <p className="text-sm text-slate-500">{role.company}&nbsp;·&nbsp;{role.period}</p>
-          </div>
-          <ul className="space-y-2">
-            {(role.bullets ?? []).map((b, i) => (
-              <li key={i} className="flex gap-2 text-sm text-slate-700">
-                <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
-                {b}
-              </li>
-            ))}
-          </ul>
-        </SectionCard>
-      ))}
+      {/* Cards view */}
+      {mode === 'cards' && (
+        <div className="space-y-4">
 
-      {/* ④ Civilian Translation */}
-      <SectionCard title="Civilian Translation">
-        <ul className="space-y-3">
-          {(resume.civilianTranslation ?? []).map((line, i) => (
-            <li key={i} className="flex gap-3 text-sm text-slate-700">
-              <span className="mt-0.5 flex-shrink-0 text-base">🔄</span>
-              {line}
-            </li>
-          ))}
-        </ul>
-      </SectionCard>
+          <SectionCard title="Professional Summary">
+            <p className="text-sm leading-relaxed text-slate-700">{resume.summary}</p>
+          </SectionCard>
 
-      {/* ⑤ Tailored Cover Letter */}
-      <SectionCard title="Tailored Cover Letter">
-        <div className="space-y-3">
-          {coverParas.map((para, i) => (
-            <p key={i} className="text-sm leading-relaxed text-slate-700">{para}</p>
-          ))}
-        </div>
-      </SectionCard>
-
-      {/* ⑥ Why You Are a Strong Fit */}
-      <SectionCard title="Why You Are a Strong Fit">
-        <ul className="space-y-3">
-          {(resume.whyStrongFit ?? []).map((b, i) => (
-            <li key={i} className="flex gap-3 text-sm text-slate-700">
-              <span className="mt-0.5 flex-shrink-0 text-base">✅</span>
-              {b}
-            </li>
-          ))}
-        </ul>
-      </SectionCard>
-
-      {/* ⑦ Interview Prep */}
-      <SectionCard title="Interview Prep">
-        <div className="space-y-5">
-          {(resume.interviewPrep ?? []).map((qa, i) => (
-            <div key={i} className="rounded-xl bg-slate-50 p-4">
-              <p className="mb-2 text-sm font-semibold text-slate-800">Q: {qa.question}</p>
-              <p className="text-sm leading-relaxed text-slate-600">{qa.answer}</p>
+          <SectionCard title="Core Skills">
+            <div className="flex flex-wrap gap-2">
+              {(resume.coreSkills ?? []).map((s, i) => (
+                <span key={i} className="rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-xs font-medium text-blue-700">
+                  {s}
+                </span>
+              ))}
             </div>
+          </SectionCard>
+
+          {(resume.experience ?? []).map((role, ri) => (
+            <SectionCard key={ri} title="Professional Experience">
+              <div className="mb-3">
+                <p className="font-semibold text-slate-800">{role.title}</p>
+                <p className="text-sm text-slate-500">{role.company}&nbsp;·&nbsp;{role.period}</p>
+              </div>
+              <ul className="space-y-2">
+                {(role.bullets ?? []).map((b, i) => (
+                  <li key={i} className="flex gap-2 text-sm text-slate-700">
+                    <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
+                    {b}
+                  </li>
+                ))}
+              </ul>
+            </SectionCard>
           ))}
+
+          <SectionCard title="Civilian Translation">
+            <ul className="space-y-3">
+              {(resume.civilianTranslation ?? []).map((line, i) => (
+                <li key={i} className="flex gap-3 text-sm text-slate-700">
+                  <span className="mt-0.5 flex-shrink-0 text-base">🔄</span>
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </SectionCard>
+
+          <SectionCard title="Tailored Cover Letter">
+            <div className="space-y-3">
+              {coverParas.map((para, i) => (
+                <p key={i} className="text-sm leading-relaxed text-slate-700">{para}</p>
+              ))}
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Why You Are a Strong Fit">
+            <ul className="space-y-3">
+              {(resume.whyStrongFit ?? []).map((b, i) => (
+                <li key={i} className="flex gap-3 text-sm text-slate-700">
+                  <span className="mt-0.5 flex-shrink-0 text-base">✅</span>
+                  {b}
+                </li>
+              ))}
+            </ul>
+          </SectionCard>
+
+          <SectionCard title="Interview Prep">
+            <div className="space-y-5">
+              {(resume.interviewPrep ?? []).map((qa, i) => (
+                <div key={i} className="rounded-xl bg-slate-50 p-4">
+                  <p className="mb-2 text-sm font-semibold text-slate-800">Q: {qa.question}</p>
+                  <p className="text-sm leading-relaxed text-slate-600">{qa.answer}</p>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+
         </div>
-      </SectionCard>
+      )}
+
+      {/* Document + Download */}
+      {mode === 'document' && <DocumentEditor resume={resume} />}
+
     </div>
   )
 }

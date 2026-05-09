@@ -421,40 +421,48 @@ function BuildHeader({ onBack }) {
   )
 }
 
-function StepProgress({ currentStep }) {
+function StepProgress({ currentStep, maxStep, onStepClick }) {
   const steps = [
-    { n: 1, label: 'Experience' },
-    { n: 2, label: 'Job Details' },
-    { n: 3, label: 'Extras' },
-    { n: 4, label: 'Preview & Finish' },
+    { n: 1, label: 'Your Background' },
+    { n: 2, label: 'Target Job' },
+    { n: 3, label: 'Preview & Finish' },
   ]
   return (
     <div className="mb-7 flex items-start">
-      {steps.map((s, i) => (
-        <div key={s.n} className="flex flex-1 items-start">
-          <div className="flex flex-col items-center gap-1.5 w-full">
-            <div className="relative flex w-full items-center">
-              {/* Left connector */}
-              <div className={`flex-1 h-0.5 ${i === 0 ? 'invisible' : currentStep >= s.n ? 'bg-[#2C3A2C]' : 'bg-slate-200'}`} />
-              <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold transition-all
-                ${currentStep === s.n
-                  ? 'text-white shadow-md'
-                  : currentStep > s.n
-                    ? 'text-white'
-                    : 'border-2 border-slate-300 bg-white text-slate-400'}`}
-                style={currentStep >= s.n ? { backgroundColor: OL } : {}}>
-                {s.n}
+      {steps.map((s, i) => {
+        const canNavigate = s.n !== currentStep && s.n <= (maxStep ?? currentStep)
+        return (
+          <div key={s.n} className="flex flex-1 items-start">
+            <div className="flex flex-col items-center gap-1.5 w-full">
+              <div className="relative flex w-full items-center">
+                <div className={`flex-1 h-0.5 ${i === 0 ? 'invisible' : currentStep >= s.n ? 'bg-[#2C3A2C]' : 'bg-slate-200'}`} />
+                <button
+                  onClick={() => canNavigate && onStepClick(s.n)}
+                  disabled={!canNavigate}
+                  className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold transition-all
+                    ${canNavigate ? 'cursor-pointer hover:opacity-80 hover:ring-2 hover:ring-offset-1 hover:ring-[#2C3A2C]' : 'cursor-default'}
+                    ${currentStep === s.n
+                      ? 'text-white shadow-md'
+                      : s.n <= (maxStep ?? currentStep)
+                        ? 'text-white'
+                        : 'border-2 border-slate-300 bg-white text-slate-400'}`}
+                  style={s.n <= (maxStep ?? currentStep) ? { backgroundColor: OL } : {}}
+                  title={canNavigate ? `Go to ${s.label}` : undefined}
+                >
+                  {s.n < currentStep || (s.n !== currentStep && s.n <= (maxStep ?? 1)) ? '✓' : s.n}
+                </button>
+                <div className={`flex-1 h-0.5 ${i === steps.length - 1 ? 'invisible' : s.n < (maxStep ?? currentStep) ? 'bg-[#2C3A2C]' : 'bg-slate-200'}`} />
               </div>
-              {/* Right connector */}
-              <div className={`flex-1 h-0.5 ${i === steps.length - 1 ? 'invisible' : currentStep > s.n ? 'bg-[#2C3A2C]' : 'bg-slate-200'}`} />
+              <span className={`hidden text-center text-xs font-medium leading-tight sm:block
+                ${currentStep === s.n ? 'text-slate-800' : canNavigate ? 'cursor-pointer text-slate-500 hover:text-slate-700 underline-offset-2 hover:underline' : 'text-slate-400'}`}
+                onClick={() => canNavigate && onStepClick(s.n)}
+              >
+                {s.label}
+              </span>
             </div>
-            <span className={`hidden text-center text-xs font-medium leading-tight sm:block
-              ${currentStep === s.n ? 'text-slate-800' : 'text-slate-400'}`}>
-              {s.label}
-            </span>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -749,7 +757,7 @@ function ExperienceCard({ experience, setExperience, error }) {
           <PersonIcon />
         </div>
         <div>
-          <h2 className="font-bold text-slate-900">1. Tell us about your experience</h2>
+          <h2 className="font-bold text-slate-900">Tell us about your experience</h2>
           <p className="text-sm text-slate-500">Share your role, responsibilities, skills, and achievements.</p>
         </div>
       </div>
@@ -809,36 +817,134 @@ function ExperienceCard({ experience, setExperience, error }) {
   )
 }
 
-// ─── Step 2: Job card ─────────────────────────────────────────────────────────
+// ─── Step 2: Job match card ───────────────────────────────────────────────────
 
-function JobCard({ jobDescription, setJobDescription }) {
+function JobMatchCard({ jobs, isLoading, error, jobDescription, setJobDescription }) {
+  const [selectedTitle, setSelectedTitle] = useState('')
+  const [customTitle,   setCustomTitle]   = useState('')
+  const [pasteOpen,     setPasteOpen]     = useState(false)
+
+  const selectCard = (job) => {
+    if (selectedTitle === job.title) {
+      setSelectedTitle('')
+      setJobDescription('')
+    } else {
+      setSelectedTitle(job.title)
+      setCustomTitle('')
+      setJobDescription(job.description)
+    }
+  }
+
+  const handleCustomChange = (val) => {
+    setCustomTitle(val)
+    setSelectedTitle(val ? '__custom__' : '')
+    if (!pasteOpen) setJobDescription(val ? `Targeting role: ${val}` : '')
+  }
+
+  const inputCls = 'w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2C3A2C] focus:bg-white focus:ring-2 focus:ring-[#2C3A2C]/15'
+
   return (
     <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-start gap-3">
+      <div className="mb-5 flex items-start gap-3">
         <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600">
           <TargetIcon />
         </div>
         <div>
-          <h2 className="font-bold text-slate-900">
-            2. Add the job you&apos;re targeting{' '}
-            <span className="text-sm font-normal text-slate-400">(optional)</span>
-          </h2>
-          <p className="text-sm text-slate-500">
-            Paste any part of the job description — title, requirements, responsibilities…
-          </p>
+          <h2 className="font-bold text-slate-900">What job are you targeting?</h2>
+          <p className="text-sm text-slate-500">Based on your background, here are roles you qualify for.</p>
         </div>
       </div>
 
-      <textarea
-        value={jobDescription}
-        onChange={e => setJobDescription(e.target.value)}
-        placeholder="Start typing here..."
-        rows={5}
-        className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-base leading-relaxed text-slate-900 outline-none transition focus:border-[#2C3A2C] focus:bg-white focus:ring-2 focus:ring-[#2C3A2C]/15"
-      />
-      <p className="mt-2 text-xs text-slate-400">
-        This helps us match your resume to the right keywords.
-      </p>
+      {isLoading ? (
+        <div className="py-10 text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center">
+            <Spinner />
+          </div>
+          <p className="text-sm font-medium text-slate-600">Finding your best matches…</p>
+          <p className="mt-1 text-xs text-slate-400">Analyzing your military background</p>
+        </div>
+      ) : (
+        <>
+          {error && (
+            <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">{error}</p>
+          )}
+
+          {jobs.length > 0 && (
+            <div className="space-y-2">
+              {jobs.map(job => {
+                const selected = selectedTitle === job.title
+                return (
+                  <button
+                    key={job.title}
+                    onClick={() => selectCard(job)}
+                    className={`w-full rounded-xl border p-4 text-left transition ${
+                      selected
+                        ? 'border-[#2C3A2C] bg-[#2C3A2C]/5'
+                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-semibold text-slate-900">{job.title}</span>
+                      <span className={`h-4 w-4 flex-shrink-0 rounded-full border-2 transition ${selected ? 'border-[#2C3A2C] bg-[#2C3A2C]' : 'border-slate-300'}`} />
+                    </div>
+                    <p className="mt-1 text-xs leading-snug text-slate-500">{job.matchReason}</p>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {selectedTitle && selectedTitle !== '__custom__' && selectedTitle !== '__paste__' && !pasteOpen && (
+            <div className="mt-4">
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Generated job description — edit if needed
+              </p>
+              <textarea
+                value={jobDescription}
+                onChange={e => setJobDescription(e.target.value)}
+                rows={5}
+                className={`${inputCls} resize-none leading-relaxed`}
+              />
+            </div>
+          )}
+
+          <div className="mt-4">
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              {jobs.length > 0 ? 'Or type your own job title' : 'Type the job you want to target'}
+            </p>
+            <input
+              type="text"
+              value={customTitle}
+              onChange={e => handleCustomChange(e.target.value)}
+              placeholder="e.g. Project Manager, Logistics Coordinator…"
+              className={inputCls}
+            />
+          </div>
+
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <button
+              onClick={() => setPasteOpen(v => !v)}
+              className="flex items-center gap-2 text-xs text-slate-400 transition hover:text-slate-600"
+            >
+              <span className="text-[10px]">{pasteOpen ? '▼' : '▶'}</span>
+              Already have a specific job posting? Paste it here
+            </button>
+            {pasteOpen && (
+              <textarea
+                value={jobDescription}
+                onChange={e => {
+                  setJobDescription(e.target.value)
+                  setSelectedTitle('__paste__')
+                  setCustomTitle('')
+                }}
+                placeholder="Paste any part of the job description — title, requirements, responsibilities…"
+                rows={6}
+                className={`mt-3 ${inputCls} resize-none leading-relaxed`}
+              />
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -854,7 +960,7 @@ function ExtrasCard({ onExtracted }) {
         </div>
         <div>
           <h2 className="font-bold text-slate-900">
-            3. Add any documents that support your story{' '}
+            Add any documents that support your story{' '}
             <span className="text-sm font-normal text-slate-400">(optional)</span>
           </h2>
           <p className="text-sm text-slate-500">
@@ -1695,20 +1801,30 @@ function BuildScreen({
   buildPhase, setBuildPhase,
   experience, setExperience,
   jobDescription, setJobDescription,
+  suggestedJobs, jobsLoading, jobsError,
   isLoading, apiError, resume, hasPaid,
-  onSubmit,
+  onSubmit, onMoveToJobMatch,
 }) {
   const [expError, setExpError] = useState('')
-  const currentStep = buildPhase === 'preview' ? 4 : 1
+  const currentStep = buildPhase === 'preview' ? 3 : buildPhase === 'job-match' ? 2 : 1
+  const [maxStep, setMaxStep] = useState(1)
+  useEffect(() => { setMaxStep(prev => Math.max(prev, currentStep)) }, [currentStep])
 
   const handleContinue = () => {
-    if (!experience.trim()) {
-      setExpError('Please tell us about your experience before continuing.')
+    if (buildPhase === 'form') {
+      if (!experience.trim()) {
+        setExpError('Please tell us about your experience before continuing.')
+        return
+      }
+      setExpError('')
+      onMoveToJobMatch()
       return
     }
-    setExpError('')
-    onSubmit()
-    setBuildPhase('preview')
+    if (buildPhase === 'job-match') {
+      onSubmit()
+      setBuildPhase('preview')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
   }
 
   return (
@@ -1724,34 +1840,57 @@ function BuildScreen({
           </p>
         </div>
 
-        <StepProgress currentStep={currentStep} />
+        <StepProgress
+          currentStep={currentStep}
+          maxStep={maxStep}
+          onStepClick={n => {
+            if (n === 1) setBuildPhase('form')
+            if (n === 2) setBuildPhase('job-match')
+            if (n === 3) setBuildPhase('preview')
+          }}
+        />
 
-        {buildPhase === 'form' && (
+        {(buildPhase === 'form' || buildPhase === 'job-match') && (
           <div className="lg:grid lg:grid-cols-[1fr_340px] lg:gap-8 xl:grid-cols-[1fr_380px]">
             {/* ── Left: form steps ── */}
             <div>
-              <ExperienceCard
-                experience={experience}
-                setExperience={setExperience}
-                error={expError}
-              />
-              <JobCard
-                jobDescription={jobDescription}
-                setJobDescription={setJobDescription}
-              />
-              <ExtrasCard
-                onExtracted={text => setExperience(prev => {
-                  const base = prev.trim()
-                  return base ? `${base}\n\n${text}` : text
-                })}
-              />
+              {buildPhase === 'form' && (
+                <>
+                  <ExperienceCard
+                    experience={experience}
+                    setExperience={setExperience}
+                    error={expError}
+                  />
+                  <ExtrasCard
+                    onExtracted={text => setExperience(prev => {
+                      const base = prev.trim()
+                      return base ? `${base}\n\n${text}` : text
+                    })}
+                  />
+                </>
+              )}
+
+              {buildPhase === 'job-match' && (
+                <JobMatchCard
+                  jobs={suggestedJobs}
+                  isLoading={jobsLoading}
+                  error={jobsError}
+                  jobDescription={jobDescription}
+                  setJobDescription={setJobDescription}
+                />
+              )}
 
               <button
                 onClick={handleContinue}
+                disabled={buildPhase === 'job-match' && jobsLoading}
                 style={{ backgroundColor: OL }}
-                className="mt-2 flex w-full items-center justify-center gap-3 rounded-2xl py-5 text-base font-black uppercase tracking-widest text-white shadow-lg transition hover:opacity-90 active:scale-[0.98]"
+                className="mt-2 flex w-full items-center justify-center gap-3 rounded-2xl py-5 text-base font-black uppercase tracking-widest text-white shadow-lg transition hover:opacity-90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Continue to Preview <span className="text-xl">→</span>
+                {buildPhase === 'form'
+                  ? <>Find My Job Matches <span className="text-xl">→</span></>
+                  : jobsLoading
+                  ? <><Spinner /> Analyzing your background…</>
+                  : <>Generate My Resume <span className="text-xl">→</span></>}
               </button>
               <p className="mb-8 mt-3 flex items-center justify-center gap-1.5 text-sm text-slate-400">
                 <LockIcon size={13} />
@@ -1823,7 +1962,7 @@ function BuildScreen({
               <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700">
                 <span className="font-semibold">Error: </span>{apiError}
                 <button
-                  onClick={() => setBuildPhase('form')}
+                  onClick={() => setBuildPhase('job-match')}
                   className="ml-2 underline hover:text-red-900"
                 >
                   Try again
@@ -1849,6 +1988,9 @@ function Home() {
   const [resume,         setResume]         = useState(null)
   const [apiError,       setApiError]       = useState('')
   const [hasPaid,        setHasPaid]        = useState(false)
+  const [suggestedJobs,  setSuggestedJobs]  = useState([])
+  const [jobsLoading,    setJobsLoading]    = useState(false)
+  const [jobsError,      setJobsError]      = useState('')
 
   // Restore resume after Stripe redirect
   useEffect(() => {
@@ -1887,11 +2029,30 @@ function Home() {
     }
   }
 
+  const handleMoveToJobMatch = async () => {
+    setBuildPhase('job-match')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    setJobsLoading(true)
+    setJobsError('')
+    setSuggestedJobs([])
+    setJobDescription('')
+    try {
+      const { data } = await api.post('/suggest-jobs', { experience: experience.trim() })
+      setSuggestedJobs(data.jobs ?? [])
+    } catch {
+      setJobsError('Could not load suggestions — you can still type your own job title below.')
+    } finally {
+      setJobsLoading(false)
+    }
+  }
+
   const handleStart = () => {
     setScreen('build')
     setBuildPhase('form')
     setResume(null)
     setApiError('')
+    setSuggestedJobs([])
+    setJobsError('')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -1908,11 +2069,15 @@ function Home() {
       setExperience={setExperience}
       jobDescription={jobDescription}
       setJobDescription={setJobDescription}
+      suggestedJobs={suggestedJobs}
+      jobsLoading={jobsLoading}
+      jobsError={jobsError}
       isLoading={isLoading}
       apiError={apiError}
       resume={resume}
       hasPaid={hasPaid}
       onSubmit={handleSubmit}
+      onMoveToJobMatch={handleMoveToJobMatch}
     />
   )
 }

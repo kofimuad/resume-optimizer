@@ -16,10 +16,14 @@
         "npm:@vitejs/plugin-react@^4.3.4",
         "npm:autoprefixer@^10.4.20",
         "npm:axios@^1.7.9",
+        "npm:html2canvas@^1.4.1",
+        "npm:jspdf@^2.5.2",
+        "npm:openai@^4.104.0",
         "npm:postcss@^8.4.49",
         "npm:react-dom@^18.3.1",
         "npm:react-router-dom@^6.28.0",
         "npm:react@^18.3.1",
+        "npm:stripe@^17.7.0",
         "npm:tailwindcss@^3.4.17",
         "npm:vite@^6.0.3"
       ]

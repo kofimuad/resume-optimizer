@@ -252,10 +252,33 @@ function FeatureGrid() {
 }
 
 function TestimonialSection() {
+  const stats = [
+    { value: '10K+', label: 'Resumes Built' },
+    { value: '85%',  label: 'More Interviews' },
+    { value: '4.8 ★', label: 'Avg Rating' },
+  ]
   return (
-    <section className="bg-white px-4 pb-16 pt-2">
+    <section className="bg-white px-4 pb-12 pt-2">
       <div className="mx-auto max-w-6xl px-2 sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-stretch">
+
+        {/* Mobile: compact stats strip + single-line quote */}
+        <div className="sm:hidden">
+          <div className="flex divide-x divide-slate-100 rounded-2xl border border-slate-100 bg-slate-50">
+            {stats.map(({ value, label }) => (
+              <div key={label} className="flex-1 py-4 text-center">
+                <p className="text-lg font-black text-slate-900">{value}</p>
+                <p className="mt-0.5 text-[10px] text-slate-500">{label}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 px-1 text-sm italic leading-relaxed text-slate-500">
+            &ldquo;CareerForge helped me turn my military experience into a resume that got me interviews.&rdquo;
+            <span className="ml-2 not-italic font-semibold text-slate-400">— Jason T., U.S. Army Veteran</span>
+          </p>
+        </div>
+
+        {/* Desktop: full layout */}
+        <div className="hidden sm:flex gap-4 items-stretch">
           <div className="flex-1 rounded-2xl border border-slate-100 bg-slate-50 p-6">
             <div className="mb-3 text-4xl leading-none text-slate-200">&ldquo;</div>
             <p className="mb-4 text-sm leading-relaxed text-slate-700">
@@ -263,19 +286,16 @@ function TestimonialSection() {
             </p>
             <p className="text-xs font-semibold text-slate-500">— Jason T., U.S. Army Veteran</p>
           </div>
-          <div className="flex flex-row gap-3 sm:flex-col sm:justify-center">
-            {[
-              { value: '10K+', label: 'Resumes Built' },
-              { value: '85%',  label: 'Get More Interviews' },
-              { value: '4.8 ★', label: 'Average Rating' },
-            ].map(({ value, label }) => (
-              <div key={label} className="flex-1 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 text-center sm:min-w-[110px]">
+          <div className="flex flex-col justify-center gap-3">
+            {stats.map(({ value, label }) => (
+              <div key={label} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 text-center min-w-[110px]">
                 <p className="text-xl font-black text-slate-900">{value}</p>
                 <p className="mt-0.5 text-xs text-slate-500">{label}</p>
               </div>
             ))}
           </div>
         </div>
+
       </div>
     </section>
   )
@@ -287,7 +307,19 @@ function LandingScreen({ onStart }) {
       {/* Nav + hero merged into one seamless full-viewport dark section */}
       <div style={{ backgroundColor: OL_BG }} className="relative flex min-h-screen flex-col overflow-hidden">
 
-        {/* Soldier image — mask-image fade eliminates the hard left edge entirely */}
+        {/* Mobile: full-bleed soldier image with heavy dark overlay */}
+        <div className="pointer-events-none absolute inset-0 lg:hidden">
+          <img
+            src="/images/soldier.png"
+            alt=""
+            className="h-full w-full object-cover object-[33%_30%]"
+            onError={e => { e.currentTarget.style.display = 'none' }}
+          />
+          <div className="absolute inset-0" style={{ background: 'rgba(15,26,15,0.80)' }} />
+          <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#0F1A0F] to-transparent" />
+        </div>
+
+        {/* Desktop: mask-blend on right side only */}
         <div
           className="pointer-events-none absolute inset-y-0 right-0 hidden w-[65%] lg:block"
           style={{
@@ -304,13 +336,6 @@ function LandingScreen({ onStart }) {
           <div className="absolute inset-0" style={{ background: 'linear-gradient(to right, rgba(15,26,15,0.6) 0%, rgba(15,26,15,0.2) 50%, transparent 80%)' }} />
           <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#0F1A0F] to-transparent" />
         </div>
-
-        {/* Mobile subtle grid texture */}
-        <div className="pointer-events-none absolute inset-0 opacity-[0.035] lg:hidden"
-          style={{
-            backgroundImage: 'repeating-linear-gradient(0deg,#fff 0,#fff 1px,transparent 0,transparent 48px),repeating-linear-gradient(90deg,#fff 0,#fff 1px,transparent 0,transparent 48px)',
-            backgroundSize: '48px 48px',
-          }} />
 
         {/* Nav — no border, no shadow, inherits the dark section seamlessly */}
         <header className="relative z-50 w-full">
@@ -355,8 +380,8 @@ function LandingScreen({ onStart }) {
                 professional resume for your target job.
               </p>
 
-              {/* 3-column feature strip */}
-              <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-3">
+              {/* 3-column feature strip — desktop only */}
+              <div className="mt-8 hidden gap-5 lg:grid lg:grid-cols-3">
                 {[
                   { icon: <ShieldCheckIcon size={18} />, title: 'Military to Civilian Translation', desc: 'We translate your military experience into civilian terms.' },
                   { icon: <TargetIcon size={18} />,      title: 'ATS-Optimized & Recruiter Friendly', desc: 'Resumes built to pass screening and impress recruiters.' },
@@ -392,7 +417,7 @@ function LandingScreen({ onStart }) {
         </div>
       </div>
 
-      <FeatureGrid />
+      <div className="hidden sm:block"><FeatureGrid /></div>
       <TestimonialSection />
     </div>
   )

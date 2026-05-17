@@ -51,6 +51,7 @@ export async function handler(event) {
         },
       ],
       mode: 'payment',
+      allow_promotion_codes: true,
       success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${siteUrl}/`,
     })

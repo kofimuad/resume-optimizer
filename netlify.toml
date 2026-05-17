@@ -23,6 +23,13 @@
   to = "/.netlify/functions/:splat"
   status = 200
 
+# Stripe webhook — configure this URL in the Stripe dashboard.
+# Required env var: STRIPE_WEBHOOK_SECRET (copy from Stripe → Developers → Webhooks → signing secret)
+[[redirects]]
+  from = "/webhooks/stripe"
+  to = "/.netlify/functions/stripe-webhook"
+  status = 200
+
 # SPA fallback — React Router handles client-side routing
 [[redirects]]
   from = "/*"

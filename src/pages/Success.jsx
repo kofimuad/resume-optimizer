@@ -28,8 +28,9 @@ function Success() {
       .then(({ data }) => {
         if (data.paid) {
           setStatus('paid')
-          // Brief pause so user sees the confirmation, then redirect home
-          setTimeout(() => navigate('/?paid=1'), 2200)
+          // Brief pause so user sees the confirmation, then redirect home with
+          // session_id so Home.jsx can call /unlock to generate the full resume.
+          setTimeout(() => navigate(`/?session_id=${sessionId}`), 2200)
         } else {
           setStatus('failed')
         }

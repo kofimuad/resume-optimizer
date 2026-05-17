@@ -1640,27 +1640,27 @@ function FullResume({ resume }) {
 
 // ─── Preview section ──────────────────────────────────────────────────────────
 
-function PreviewSection({ resume, hasPaid }) {
+function PreviewSection({ preview, resume, hasPaid, experience, jobDescription }) {
   const ref = useRef(null)
-  const [unlocked,    setUnlocked]    = useState(false)
   const [unlocking,   setUnlocking]   = useState(false)
   const [unlockError, setUnlockError] = useState('')
 
   useEffect(() => {
-    if (resume) {
-      setUnlocked(false)
+    const data = preview || resume
+    if (data) {
       setUnlockError('')
       setTimeout(() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
     }
-  }, [resume])
-
-  useEffect(() => { if (hasPaid) setUnlocked(true) }, [hasPaid])
+  }, [preview, resume])
 
   const handleUnlock = async () => {
     setUnlocking(true)
     setUnlockError('')
     try {
-      localStorage.setItem('resumeai_resume', JSON.stringify(resume))
+      // Store inputs (not the resume) so /unlock can regenerate server-side
+      // after Stripe confirms payment.
+      localStorage.setItem('resumeai_experience', experience)
+      localStorage.setItem('resumeai_jobDescription', jobDescription)
       const { data } = await api.post('/create-checkout', {})
       window.location.href = data.url
     } catch (err) {
@@ -1669,13 +1669,7 @@ function PreviewSection({ resume, hasPaid }) {
     }
   }
 
-  if (!resume) return null
-
-  const role           = resume.experience?.[0] ?? {}
-  const allBullets     = role.bullets ?? []
-  const visibleBullets = allBullets.slice(0, 2)
-  const hiddenBullets  = allBullets.slice(2)
-  const coverParas     = (resume.coverLetter ?? '').split(/\n\n+/).filter(Boolean)
+  if (!preview && !resume) return null
 
   return (
     <section ref={ref} id="preview-section" className="pb-16">
@@ -1684,7 +1678,7 @@ function PreviewSection({ resume, hasPaid }) {
         <div>
           <h2 className="text-lg font-bold text-slate-900">Your Resume Preview</h2>
           <p className="text-sm text-slate-500">
-            {unlocked ? 'Full package — all 7 sections' : 'Free preview · Unlock the full package below'}
+            {resume ? 'Full package — all 7 sections' : 'Free preview · Unlock the full package below'}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -1693,72 +1687,56 @@ function PreviewSection({ resume, hasPaid }) {
               Payment Verified ✓
             </span>
           ) : (
-            <>
-              <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
-                AI Generated
-              </span>
-              <button
-                onClick={() => setUnlocked(u => !u)}
-                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-[#2C3A2C] hover:text-[#2C3A2C]"
-              >
-                {unlocked ? '🔒 Lock view' : '👁 See full'}
-              </button>
-            </>
+            <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+              AI Generated
+            </span>
           )}
         </div>
       </div>
 
-      {unlocked && <FullResume resume={resume} />}
+      {resume && <FullResume resume={resume} />}
 
-      {!unlocked && (
+      {!resume && (
         <>
           <SectionCard title="Professional Summary" badge="Visible">
-            <p className="text-sm leading-relaxed text-slate-700">{resume.summary}</p>
+            <p className="text-sm leading-relaxed text-slate-700">{preview?.summary}</p>
           </SectionCard>
 
-          <SectionCard title="Professional Experience" badge="Visible">
-            <div className="mb-3">
-              <p className="font-semibold text-slate-800">{role.title}</p>
-              <p className="text-sm text-slate-500">{role.company}&nbsp;·&nbsp;{role.period}</p>
-            </div>
-            <ul className="space-y-2">
-              {visibleBullets.map((b, i) => (
-                <li key={i} className="flex gap-2 text-sm text-slate-700">
-                  <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ backgroundColor: OL }} />
-                  {b}
-                </li>
-              ))}
-            </ul>
-            {hiddenBullets.length > 0 && (
-              <div className="relative mt-2 overflow-hidden">
-                <ul className="pointer-events-none select-none space-y-2 blur-sm">
-                  {hiddenBullets.map((b, i) => (
+          {/* Blurred teaser — real coreSkills data, static placeholders for paid sections */}
+          <div className="relative mb-4 overflow-hidden rounded-2xl">
+            <div className="pointer-events-none select-none space-y-4 blur-sm">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Core Skills</p>
+                <div className="flex flex-wrap gap-2">
+                  {(preview?.coreSkills ?? []).map((s, i) => (
+                    <span key={i} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">{s}</span>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Professional Experience</p>
+                <ul className="space-y-2">
+                  {[
+                    'Led cross-functional teams to deliver mission-critical outcomes on time and within scope.',
+                    'Streamlined operational processes, increasing team efficiency by over 20%.',
+                    'Managed high-value asset portfolios with full accountability and zero discrepancies.',
+                    'Trained and mentored junior team members on technical and leadership competencies.',
+                  ].map((b, i) => (
                     <li key={i} className="flex gap-2 text-sm text-slate-700">
                       <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ backgroundColor: OL }} />
                       {b}
                     </li>
                   ))}
                 </ul>
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white" />
-              </div>
-            )}
-          </SectionCard>
-
-          {/* Blurred teaser */}
-          <div className="relative mb-4 overflow-hidden rounded-2xl">
-            <div className="pointer-events-none select-none space-y-4 blur-sm">
-              <div className="rounded-2xl border border-slate-200 bg-white p-5">
-                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Core Skills</p>
-                <div className="flex flex-wrap gap-2">
-                  {(resume.coreSkills ?? []).map((s, i) => (
-                    <span key={i} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">{s}</span>
-                  ))}
-                </div>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white p-5">
                 <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Why You Are a Strong Fit</p>
                 <ul className="space-y-2">
-                  {(resume.whyStrongFit ?? []).map((b, i) => (
+                  {[
+                    'Proven leadership experience directly addresses the need for strong team management.',
+                    'Technical proficiency aligns with the required skills outlined in the job description.',
+                    'Track record of results-driven performance matches the expected outcomes for this role.',
+                  ].map((b, i) => (
                     <li key={i} className="flex gap-2 text-sm text-slate-700">
                       <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-green-500" />
                       {b}
@@ -1768,15 +1746,14 @@ function PreviewSection({ resume, hasPaid }) {
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white p-5">
                 <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Tailored Cover Letter</p>
-                {coverParas.slice(0, 2).map((p, i) => (
-                  <p key={i} className="mt-1 text-sm leading-relaxed text-slate-700">{p}</p>
-                ))}
+                <p className="mt-1 text-sm leading-relaxed text-slate-700">With extensive experience in operations and team leadership, I am confident in my ability to make an immediate impact in this role and contribute meaningfully from day one.</p>
+                <p className="mt-1 text-sm leading-relaxed text-slate-700">My background has equipped me with the technical skills and leadership capabilities needed to excel in this position and drive results across the organisation.</p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white p-5">
                 <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Interview Prep (3 answers)</p>
                 <ul className="space-y-3">
-                  {(resume.interviewPrep ?? []).map((qa, i) => (
-                    <li key={i} className="text-sm font-medium text-slate-700">{qa.question}</li>
+                  {['Tell me about yourself.', 'Why are you a good fit for this role?', 'Describe a challenge you overcame.'].map((q, i) => (
+                    <li key={i} className="text-sm font-medium text-slate-700">{q}</li>
                   ))}
                 </ul>
               </div>
@@ -1827,7 +1804,7 @@ function BuildScreen({
   experience, setExperience,
   jobDescription, setJobDescription,
   suggestedJobs, jobsLoading, jobsError,
-  isLoading, apiError, resume, hasPaid,
+  isLoading, isUnlocking, apiError, preview, resume, hasPaid,
   onSubmit, onMoveToJobMatch,
 }) {
   const [expError, setExpError] = useState('')
@@ -1974,27 +1951,39 @@ function BuildScreen({
 
         {buildPhase === 'preview' && (
           <div className="mx-auto max-w-3xl">
-            {isLoading && (
+            {(isLoading || isUnlocking) && (
               <div className="py-20 text-center">
                 <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-sm">
                   <Spinner />
                 </div>
-                <p className="text-base font-semibold text-slate-700">Building your resume…</p>
+                <p className="text-base font-semibold text-slate-700">
+                  {isUnlocking ? 'Generating your full package…' : 'Building your preview…'}
+                </p>
                 <p className="mt-1 text-sm text-slate-400">This takes about 10–15 seconds</p>
               </div>
             )}
-            {apiError && !isLoading && (
+            {apiError && !isLoading && !isUnlocking && (
               <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700">
                 <span className="font-semibold">Error: </span>{apiError}
-                <button
-                  onClick={() => setBuildPhase('job-match')}
-                  className="ml-2 underline hover:text-red-900"
-                >
-                  Try again
-                </button>
+                {!hasPaid && (
+                  <button
+                    onClick={() => setBuildPhase('job-match')}
+                    className="ml-2 underline hover:text-red-900"
+                  >
+                    Try again
+                  </button>
+                )}
               </div>
             )}
-            {resume && !isLoading && <PreviewSection resume={resume} hasPaid={hasPaid} />}
+            {(preview || resume) && !isLoading && !isUnlocking && (
+              <PreviewSection
+                preview={preview}
+                resume={resume}
+                hasPaid={hasPaid}
+                experience={experience}
+                jobDescription={jobDescription}
+              />
+            )}
           </div>
         )}
       </div>
@@ -2010,6 +1999,8 @@ function Home() {
   const [experience,     setExperience]     = useState('')
   const [jobDescription, setJobDescription] = useState('')
   const [isLoading,      setIsLoading]      = useState(false)
+  const [isUnlocking,    setIsUnlocking]    = useState(false)
+  const [preview,        setPreview]        = useState(null)
   const [resume,         setResume]         = useState(null)
   const [apiError,       setApiError]       = useState('')
   const [hasPaid,        setHasPaid]        = useState(false)
@@ -2017,25 +2008,39 @@ function Home() {
   const [jobsLoading,    setJobsLoading]    = useState(false)
   const [jobsError,      setJobsError]      = useState('')
 
-  // Restore resume after Stripe redirect
+  // After Stripe redirect: verify payment server-side then generate the full resume.
+  // The session_id is passed by Success.jsx; experience + jobDescription were saved
+  // to localStorage before the user was sent to Stripe checkout.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (params.get('paid') === '1') {
-      try {
-        const saved = localStorage.getItem('resumeai_resume')
-        if (saved) {
-          setResume(JSON.parse(saved))
-          setHasPaid(true)
-          setScreen('build')
-          setBuildPhase('preview')
-        }
-      } catch {}
-      window.history.replaceState({}, '', '/')
-    }
+    const sessionId = params.get('session_id')
+    if (!sessionId) return
+    window.history.replaceState({}, '', '/')
+    const savedExperience      = localStorage.getItem('resumeai_experience')
+    const savedJobDescription  = localStorage.getItem('resumeai_jobDescription')
+    if (!savedExperience || !savedJobDescription) return
+    setIsUnlocking(true)
+    setScreen('build')
+    setBuildPhase('preview')
+    api.post('/unlock', {
+      session_id:     sessionId,
+      experience:     savedExperience,
+      jobDescription: savedJobDescription,
+    })
+      .then(({ data }) => {
+        setResume(data.resume)
+        setPreview({ summary: data.resume.summary, coreSkills: data.resume.coreSkills })
+        setHasPaid(true)
+        localStorage.removeItem('resumeai_experience')
+        localStorage.removeItem('resumeai_jobDescription')
+      })
+      .catch(() => setApiError('Payment verified but generation failed — please contact support at csharpworks26@gmail.com.'))
+      .finally(() => setIsUnlocking(false))
   }, [])
 
   const handleSubmit = async () => {
     setIsLoading(true)
+    setPreview(null)
     setResume(null)
     setApiError('')
     try {
@@ -2043,7 +2048,7 @@ function Home() {
         experience:     experience.trim(),
         jobDescription: jobDescription.trim(),
       })
-      setResume(data.resume)
+      setPreview(data.preview)
     } catch (err) {
       const msg =
         err?.response?.data?.error ??
@@ -2098,7 +2103,9 @@ function Home() {
       jobsLoading={jobsLoading}
       jobsError={jobsError}
       isLoading={isLoading}
+      isUnlocking={isUnlocking}
       apiError={apiError}
+      preview={preview}
       resume={resume}
       hasPaid={hasPaid}
       onSubmit={handleSubmit}

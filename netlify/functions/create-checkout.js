@@ -1,21 +1,32 @@
 import Stripe from 'stripe'
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Content-Type': 'application/json',
+const ALLOWED_ORIGINS = [
+  process.env.URL,
+  'http://localhost:8888',
+  'http://localhost:5173',
+].filter(Boolean)
+
+function getCorsHeaders(origin = '') {
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : (ALLOWED_ORIGINS[0] ?? '')
+  return {
+    'Access-Control-Allow-Origin': allowed || '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Content-Type': 'application/json',
+  }
 }
 
-function respond(statusCode, body) {
-  return { statusCode, headers: CORS, body: JSON.stringify(body) }
+function respond(statusCode, body, origin) {
+  return { statusCode, headers: getCorsHeaders(origin), body: JSON.stringify(body) }
 }
 
 export async function handler(event) {
-  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' }
-  if (event.httpMethod !== 'POST') return respond(405, { error: 'Method not allowed' })
+  const origin = event.headers.origin || ''
+
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: getCorsHeaders(origin), body: '' }
+  if (event.httpMethod !== 'POST') return respond(405, { error: 'Method not allowed' }, origin)
 
   const stripeKey = process.env.STRIPE_SECRET_KEY
-  if (!stripeKey) return respond(500, { error: 'Stripe is not configured' })
+  if (!stripeKey) return respond(500, { error: 'Payment service not configured' }, origin)
 
   const stripe = new Stripe(stripeKey)
 
@@ -40,12 +51,14 @@ export async function handler(event) {
         },
       ],
       mode: 'payment',
+      allow_promotion_codes: true,
       success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${siteUrl}/`,
     })
   } catch (err) {
-    return respond(500, { error: `Stripe error: ${err.message}` })
+    console.error('Stripe error in /create-checkout:', err?.message ?? String(err))
+    return respond(500, { error: 'Could not create checkout session — please try again.' }, origin)
   }
 
-  return respond(200, { url: session.url })
+  return respond(200, { url: session.url }, origin)
 }

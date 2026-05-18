@@ -11,6 +11,7 @@
     "netlify:dev": "netlify dev"
   },
   "dependencies": {
+    "@netlify/blobs": "^10.7.7",
     "axios": "^1.7.9",
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.2",
